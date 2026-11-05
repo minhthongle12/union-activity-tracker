@@ -62,6 +62,7 @@ async function fetchCategories(): Promise<CriteriaCategory[]> {
   const { data, error } = await supabase
     .from("criteria_categories")
     .select("*")
+    .not("code", "like", "BONUS_%")
     .order("sort_order", { ascending: true })
     .order("name", { ascending: true });
   if (error) throw error;

@@ -51,6 +51,46 @@ interface ImportRow {
 }
 
 /**
+ * 6 Nhóm tiêu chí chuẩn theo Khung Tiêu chí Đội TNTP Hồ Chí Minh (100 điểm)
+ */
+export const STANDARD_DOI_CATEGORIES = [
+  { code: "CAT_01", name: "Thực hiện chỉ tiêu năm học (16đ)", sort_order: 1 },
+  { code: "CAT_02", name: "Phong trào “Thiếu nhi Việt Nam thi đua làm theo 5 điều Bác Hồ dạy” (29đ)", sort_order: 2 },
+  { code: "CAT_03", name: "Công tác xây dựng Đội vững mạnh (34đ)", sort_order: 3 },
+  { code: "CAT_04", name: "Công tác bảo vệ, chăm sóc, đại diện tiếng nói của trẻ em (8đ)", sort_order: 4 },
+  { code: "CAT_05", name: "Công tác thông tin báo cáo (3đ)", sort_order: 5 },
+  { code: "CAT_06", name: "Thực hiện chỉ đạo của Hội đồng Đội xã (10đ)", sort_order: 6 },
+];
+
+export function resolveDoiCategory(rawCategory: string, criterionCode?: string): { code: string; name: string } {
+  const norm = (rawCategory || "").toLowerCase();
+  const cCode = (criterionCode || "").trim();
+
+  if (cCode.startsWith("1.") || norm.includes("chỉ tiêu") || norm.startsWith("1")) {
+    return { code: "CAT_01", name: "Thực hiện chỉ tiêu năm học (16đ)" };
+  }
+  if (cCode.startsWith("2.") || norm.includes("bác hồ") || norm.includes("thiếu nhi việt nam") || norm.startsWith("2")) {
+    return { code: "CAT_02", name: "Phong trào “Thiếu nhi Việt Nam thi đua làm theo 5 điều Bác Hồ dạy” (29đ)" };
+  }
+  if (cCode.startsWith("3.") || norm.includes("xây dựng đội") || norm.startsWith("3")) {
+    return { code: "CAT_03", name: "Công tác xây dựng Đội vững mạnh (34đ)" };
+  }
+  if (cCode.startsWith("4.") || norm.includes("tiếng nói") || norm.includes("trẻ em") || norm.startsWith("4")) {
+    return { code: "CAT_04", name: "Công tác bảo vệ, chăm sóc, đại diện tiếng nói của trẻ em (8đ)" };
+  }
+  if (cCode.startsWith("5.") || norm.includes("thông tin báo cáo") || norm.startsWith("5")) {
+    return { code: "CAT_05", name: "Công tác thông tin báo cáo (3đ)" };
+  }
+  if (cCode.startsWith("6.") || norm.includes("chỉ đạo") || norm.startsWith("6")) {
+    return { code: "CAT_06", name: "Thực hiện chỉ đạo của Hội đồng Đội xã (10đ)" };
+  }
+
+  // Fallback: clean the string
+  const clean = rawCategory.replace(/^\d+\.\s*/, "").replace(/\r?\n+/g, " ").replace(/\s+/g, " ").trim();
+  return { code: "CAT_01", name: clean || "Thực hiện chỉ tiêu năm học (16đ)" };
+}
+
+/**
  * Robustly extract text from an ExcelJS cell value
  * Handles string, number, boolean, Date, RichText, Formulas, and Hyperlinks
  */
@@ -464,13 +504,19 @@ export default function ImportExportPage() {
 
         // Carry forward merged category
         if (rawCategory && !inBonusSection) {
-          // Strip any numeric prefix like "1. ", "2. " and normalize line breaks
-          currentCategoryName = rawCategory
+          const cleanCat = rawCategory
             .replace(/^\d+\.\s*/, "")
             .replace(/\r?\n+/g, " ")
             .replace(/\s+/g, " ")
             .trim();
-          categoryCount++;
+          if (
+            !cleanCat.toLowerCase().startsWith("tổng") &&
+            !cleanCat.toLowerCase().includes("ghi chú") &&
+            !cleanCat.toLowerCase().includes("điểm thưởng")
+          ) {
+            currentCategoryName = cleanCat;
+            categoryCount++;
+          }
         }
 
         // Process normal criteria row
@@ -541,10 +587,12 @@ export default function ImportExportPage() {
 
           if (errors.length > 0) foundErrors = true;
 
+          const catInfo = resolveDoiCategory(currentCategoryName, criterionCode);
+
           rows.push({
             rowIndex: rowNumber,
-            categoryCode: `CAT_${categoryCount || 1}`,
-            categoryName: currentCategoryName,
+            categoryCode: catInfo.code,
+            categoryName: catInfo.name,
             criterionCode,
             criterionTitle: cleanTitle,
             description: rawEvidence || "Thực hiện theo chỉ đạo của Hội đồng Đội",
@@ -811,21 +859,31 @@ export default function ImportExportPage() {
 
       for (let i = 0; i < uniqueCats.length; i++) {
         const catName = uniqueCats[i];
+        const matchedStd = STANDARD_DOI_CATEGORIES.find(
+          (c) => c.name.toLowerCase() === catName.toLowerCase()
+        );
+        const catCode = matchedStd?.code || `CAT_${String(i + 1).padStart(2, "0")}`;
+        const sortOrder = matchedStd?.sort_order || i + 1;
+
         const { data: existing } = await supabase
           .from("criteria_categories")
           .select("id")
-          .eq("name", catName)
+          .or(`code.eq.${catCode},name.eq.${catName}`)
           .maybeSingle();
 
         if (existing) {
+          await supabase
+            .from("criteria_categories")
+            .update({ name: catName, code: catCode, sort_order: sortOrder })
+            .eq("id", existing.id);
           categoryMap.set(catName, existing.id);
         } else {
           const { data: inserted, error: catError } = await supabase
             .from("criteria_categories")
             .insert({
               name: catName,
-              code: `CAT_${String(i + 1).padStart(2, "0")}`,
-              sort_order: i + 1,
+              code: catCode,
+              sort_order: sortOrder,
             })
             .select("id")
             .single();
@@ -885,6 +943,8 @@ export default function ImportExportPage() {
           sort_order: r.displayOrder || idx + 1,
         }));
 
+        // Clean previous snapshot for this period if any
+        await supabase.from("period_criteria").delete().eq("period_id", activePeriod.id);
         await supabase.from("period_criteria").insert(periodCriteriaPayload);
       }
 
