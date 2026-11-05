@@ -72,7 +72,7 @@ async function fetchOrganizations(): Promise<Organization[]> {
     .from("organizations")
     .select("*")
     .eq("is_active", true)
-    .order("name");
+    .order("code", { ascending: true });
   if (error) throw error;
   return (data ?? []) as Organization[];
 }

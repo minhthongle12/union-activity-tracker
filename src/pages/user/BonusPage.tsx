@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
-import type { BonusRequest, BonusStatus } from "@/types/database";
+import type { BonusRequest, BonusStatus, EvaluationPeriod } from "@/types/database";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +18,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Award,
   Plus,
   Clock,
@@ -29,10 +36,40 @@ import {
   Link as LinkIcon,
   Loader2,
   Trash2,
+  Calendar,
+  ExternalLink,
+  Filter,
 } from "lucide-react";
 import { toast } from "sonner";
 
-async function fetchUserBonusRequests(orgId?: string | null) {
+export interface UserBonusWithPeriod extends BonusRequest {
+  organization_period?: {
+    id: string;
+    period?: EvaluationPeriod | null;
+  };
+  evidence?: { id: string; file_name: string; external_url: string }[];
+}
+
+export interface UserAssignedPeriod {
+  id: string; // organization_period_id
+  period_id: string;
+  status: string;
+  period: EvaluationPeriod;
+}
+
+async function fetchUserAssignedPeriods(orgId?: string | null): Promise<UserAssignedPeriod[]> {
+  if (!orgId) return [];
+  const { data, error } = await supabase
+    .from("organization_periods")
+    .select("id, period_id, status, period:evaluation_periods(*)")
+    .eq("organization_id", orgId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []).filter((op) => !!op.period) as UserAssignedPeriod[];
+}
+
+async function fetchUserBonusRequests(orgId?: string | null): Promise<UserBonusWithPeriod[]> {
   if (!orgId) return [];
   // Get all bonus requests for this org
   const { data: orgPeriods } = await supabase
@@ -45,25 +82,40 @@ async function fetchUserBonusRequests(orgId?: string | null) {
 
   const { data, error } = await supabase
     .from("bonus_requests")
-    .select("*")
+    .select(`
+      *,
+      organization_period:organization_periods(
+        id,
+        period:evaluation_periods(*)
+      ),
+      evidence:bonus_evidence_items(*)
+    `)
     .in("organization_period_id", orgPeriodIds)
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as BonusRequest[];
+  return (data ?? []) as UserBonusWithPeriod[];
 }
 
 export default function UserBonusPage() {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [filterPeriod, setFilterPeriod] = useState<string>("all");
 
   const [form, setForm] = useState({
+    organization_period_id: "",
     title: "",
     description: "",
     requested_score: 1.0,
     evidenceName: "",
     evidenceUrl: "",
+  });
+
+  const { data: assignedPeriods } = useQuery({
+    queryKey: ["user_assigned_periods", profile?.organization_id],
+    queryFn: () => fetchUserAssignedPeriods(profile?.organization_id),
+    enabled: !!profile?.organization_id,
   });
 
   const { data: bonusRequests, isLoading, refetch } = useQuery({
@@ -72,24 +124,35 @@ export default function UserBonusPage() {
     enabled: !!profile?.organization_id,
   });
 
+  function handleOpenCreateDialog() {
+    const defaultOp =
+      assignedPeriods?.find((op) => op.period?.status === "active") ||
+      assignedPeriods?.[0];
+
+    setForm({
+      organization_period_id: defaultOp?.id || "",
+      title: "",
+      description: "",
+      requested_score: 1.0,
+      evidenceName: "",
+      evidenceUrl: "",
+    });
+    setDialogOpen(true);
+  }
+
   const createBonusMutation = useMutation({
     mutationFn: async (status: BonusStatus) => {
-      // Find org_period_id
-      const { data: orgPeriod } = await supabase
-        .from("organization_periods")
-        .select("id")
-        .eq("organization_id", profile?.organization_id || "")
-        .limit(1)
-        .maybeSingle();
-
-      if (!orgPeriod) {
-        throw new Error("Đơn vị chưa được phân công đợt đánh giá nào.");
+      if (!form.organization_period_id) {
+        throw new Error("Vui lòng chọn đợt đánh giá áp dụng đề xuất điểm cộng.");
+      }
+      if (!form.title.trim()) {
+        throw new Error("Vui lòng nhập tên hoạt động / công trình thanh niên.");
       }
 
       const { data: newReq, error: reqError } = await supabase
         .from("bonus_requests")
         .insert({
-          organization_period_id: orgPeriod.id,
+          organization_period_id: form.organization_period_id,
           title: form.title.trim(),
           description: form.description.trim() || null,
           requested_score: Number(form.requested_score) || 0,
@@ -135,7 +198,14 @@ export default function UserBonusPage() {
       queryClient.invalidateQueries({ queryKey: ["user_bonus_requests"] });
       toast.success(status === "submitted" ? "Đã nộp đề xuất điểm cộng thành công!" : "Đã lưu bản nháp.");
       setDialogOpen(false);
-      setForm({ title: "", description: "", requested_score: 1.0, evidenceName: "", evidenceUrl: "" });
+      setForm({
+        organization_period_id: "",
+        title: "",
+        description: "",
+        requested_score: 1.0,
+        evidenceName: "",
+        evidenceUrl: "",
+      });
     },
     onError: (err: Error) => toast.error("Lỗi: " + err.message),
   });
@@ -155,7 +225,17 @@ export default function UserBonusPage() {
     }
   };
 
-  const totalApprovedScore = (bonusRequests ?? [])
+  const filteredBonusRequests = useMemo(() => {
+    if (!bonusRequests) return [];
+    return bonusRequests.filter((item) => {
+      if (filterPeriod !== "all" && item.organization_period?.period?.id !== filterPeriod) {
+        return false;
+      }
+      return true;
+    });
+  }, [bonusRequests, filterPeriod]);
+
+  const totalApprovedScore = (filteredBonusRequests ?? [])
     .filter((b) => b.status === "approved")
     .reduce((acc, curr) => acc + (curr.approved_score || 0), 0);
 

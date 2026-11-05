@@ -122,6 +122,11 @@ export function UnifiedCriteriaAccordion({
   const isVerified = status === "verified";
 
   // Calculate required evidence counts
+  const hasDoc1 = !!criterion.req_doc1;
+  const hasDoc2 = !!criterion.req_doc2;
+  const hasLink3 = !!criterion.req_link3;
+  const hasAnyReq = hasDoc1 || hasDoc2 || hasLink3;
+
   const doc1Items = localEvidence.filter((e) => e.evidence_type === "doc1");
   const doc2Items = localEvidence.filter((e) => e.evidence_type === "doc2");
   const link3Items = localEvidence.filter((e) => e.evidence_type === "link3");
@@ -133,24 +138,16 @@ export function UnifiedCriteriaAccordion({
   let totalReqTypes = 0;
   let fulfilledReqTypes = 0;
 
-  if (criterion.req_doc1) {
+  if (hasDoc1) {
     totalReqTypes++;
     if (doc1Count > 0) fulfilledReqTypes++;
   }
-  if (criterion.req_doc2) {
+  if (hasDoc2) {
     totalReqTypes++;
     if (doc2Count > 0) fulfilledReqTypes++;
   }
-  if (criterion.req_link3) {
+  if (hasLink3) {
     totalReqTypes++;
-    if (link3Count > 0) fulfilledReqTypes++;
-  }
-
-  // If none specified explicitly, default to 3 categories
-  if (totalReqTypes === 0) {
-    totalReqTypes = 3;
-    if (doc1Count > 0) fulfilledReqTypes++;
-    if (doc2Count > 0) fulfilledReqTypes++;
     if (link3Count > 0) fulfilledReqTypes++;
   }
 
@@ -275,7 +272,15 @@ export function UnifiedCriteriaAccordion({
   // Construct default requirement overview string
   const generalRequirements =
     criterion.description_snapshot ||
-    "1. Văn bản triển khai 2. Báo cáo tóm tắt kết quả. 3. Tin bài về hoạt động (hình ảnh phải rõ nội dung, thời gian tổ chức).";
+    (!hasAnyReq
+      ? "Không yêu cầu minh chứng. Chấm điểm theo đánh giá thực tế."
+      : [
+          hasDoc1 ? "1. Văn bản triển khai" : null,
+          hasDoc2 ? "2. Báo cáo tóm tắt kết quả" : null,
+          hasLink3 ? "3. Tin bài về hoạt động (hình ảnh phải rõ nội dung, thời gian tổ chức)" : null,
+        ]
+          .filter(Boolean)
+          .join(". "));
 
   const displayScore =
     mode === "admin"
@@ -320,8 +325,12 @@ export function UnifiedCriteriaAccordion({
           <div className="font-semibold text-slate-800 min-w-10 text-center">
             {displayScore}/{maxScore}
           </div>
-          <div className="font-medium text-slate-600 min-w-20 text-center">
-            {fulfilledReqTypes}/{totalReqTypes} yêu cầu
+          <div className="font-medium text-slate-600 min-w-24 text-center">
+            {hasAnyReq ? (
+              `${fulfilledReqTypes}/${totalReqTypes} yêu cầu`
+            ) : (
+              <span className="italic text-slate-400 font-normal">Không yêu cầu MC</span>
+            )}
           </div>
         </div>
 
@@ -660,60 +669,87 @@ export function UnifiedCriteriaAccordion({
             {/* RIGHT COLUMN: MINH CHỨNG CẦN NỘP (approx. 7 cols) */}
             {/* ------------------------------------------------------------ */}
             <div className="lg:col-span-7 bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-4">
-              <h3 className="font-bold text-slate-900 text-sm sm:text-base border-b pb-2">
-                Minh chứng cần nộp
-              </h3>
+              <div className="border-b pb-2 flex items-center justify-between">
+                <h3 className="font-bold text-slate-900 text-sm sm:text-base">
+                  Minh chứng cần nộp
+                </h3>
+                {hasAnyReq && (
+                  <span className="text-xs text-slate-500">
+                    Đã hoàn thành {fulfilledReqTypes}/{totalReqTypes} mục yêu cầu
+                  </span>
+                )}
+              </div>
 
-              {/* SECTION 1: Văn bản triển khai (doc1) */}
-              <EvidenceSubCard
-                title="Văn bản triển khai"
-                badgeText="Văn bản"
-                isRequired={criterion.req_doc1 || true}
-                items={doc1Items}
-                isEditable={isEditableUser}
-                onUploadImage={(e) => handleFileUpload("doc1", e)}
-                onUploadFile={(e) => handleFileUpload("doc1", e)}
-                onOpenAddLink={() => {
-                  setLinkType("doc1");
-                  setLinkDialogOpen(true);
-                }}
-                onRemove={handleRemoveEvidence}
-                onViewFile={handleViewFile}
-              />
+              {!hasAnyReq ? (
+                <div className="p-8 text-center bg-[#fbfcfd] rounded-xl border border-dashed border-slate-200 space-y-2">
+                  <CheckCircle2 className="h-8 w-8 text-emerald-600 mx-auto" />
+                  <h4 className="font-semibold text-slate-800 text-sm">
+                    Tiêu chí không yêu cầu nộp minh chứng
+                  </h4>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                    Đơn vị chỉ cần tự cho điểm theo hướng dẫn và bấm lưu/nộp bài để Hội đồng thẩm định xem xét.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* SECTION 1: Văn bản triển khai (doc1) */}
+                  {hasDoc1 && (
+                    <EvidenceSubCard
+                      title="Văn bản triển khai"
+                      badgeText="Văn bản"
+                      isRequired={true}
+                      items={doc1Items}
+                      isEditable={isEditableUser}
+                      onUploadImage={(e) => handleFileUpload("doc1", e)}
+                      onUploadFile={(e) => handleFileUpload("doc1", e)}
+                      onOpenAddLink={() => {
+                        setLinkType("doc1");
+                        setLinkDialogOpen(true);
+                      }}
+                      onRemove={handleRemoveEvidence}
+                      onViewFile={handleViewFile}
+                    />
+                  )}
 
-              {/* SECTION 2: Báo cáo tóm tắt kết quả (doc2) */}
-              <EvidenceSubCard
-                title="Báo cáo tóm tắt kết quả."
-                badgeText="Báo cáo"
-                isRequired={criterion.req_doc2 || true}
-                items={doc2Items}
-                isEditable={isEditableUser}
-                onUploadImage={(e) => handleFileUpload("doc2", e)}
-                onUploadFile={(e) => handleFileUpload("doc2", e)}
-                onOpenAddLink={() => {
-                  setLinkType("doc2");
-                  setLinkDialogOpen(true);
-                }}
-                onRemove={handleRemoveEvidence}
-                onViewFile={handleViewFile}
-              />
+                  {/* SECTION 2: Báo cáo tóm tắt kết quả (doc2) */}
+                  {hasDoc2 && (
+                    <EvidenceSubCard
+                      title="Báo cáo tóm tắt kết quả."
+                      badgeText="Báo cáo"
+                      isRequired={true}
+                      items={doc2Items}
+                      isEditable={isEditableUser}
+                      onUploadImage={(e) => handleFileUpload("doc2", e)}
+                      onUploadFile={(e) => handleFileUpload("doc2", e)}
+                      onOpenAddLink={() => {
+                        setLinkType("doc2");
+                        setLinkDialogOpen(true);
+                      }}
+                      onRemove={handleRemoveEvidence}
+                      onViewFile={handleViewFile}
+                    />
+                  )}
 
-              {/* SECTION 3: Tin bài về hoạt động (link3) */}
-              <EvidenceSubCard
-                title="Tin bài về hoạt động (hình ảnh phải rõ nội dung, thời gian tổ chức)."
-                badgeText="Liên kết"
-                isRequired={criterion.req_link3 || true}
-                items={link3Items}
-                isEditable={isEditableUser}
-                onUploadImage={(e) => handleFileUpload("link3", e)}
-                onUploadFile={(e) => handleFileUpload("link3", e)}
-                onOpenAddLink={() => {
-                  setLinkType("link3");
-                  setLinkDialogOpen(true);
-                }}
-                onRemove={handleRemoveEvidence}
-                onViewFile={handleViewFile}
-              />
+                  {/* SECTION 3: Tin bài về hoạt động (link3) */}
+                  {hasLink3 && (
+                    <EvidenceSubCard
+                      title="Tin bài về hoạt động (hình ảnh phải rõ nội dung, thời gian tổ chức)."
+                      badgeText="Liên kết"
+                      isRequired={true}
+                      items={link3Items}
+                      isEditable={isEditableUser}
+                      onUploadImage={(e) => handleFileUpload("link3", e)}
+                      onUploadFile={(e) => handleFileUpload("link3", e)}
+                      onOpenAddLink={() => {
+                        setLinkType("link3");
+                        setLinkDialogOpen(true);
+                      }}
+                      onRemove={handleRemoveEvidence}
+                      onViewFile={handleViewFile}
+                    />
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>

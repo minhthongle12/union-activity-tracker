@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { Organization, OrganizationInsert } from "@/types/database";
@@ -43,7 +43,7 @@ async function fetchOrganizations(): Promise<Organization[]> {
   const { data, error } = await supabase
     .from("organizations")
     .select("*")
-    .order("created_at", { ascending: false });
+    .order("code", { ascending: true });
 
   if (error) throw error;
   return (data ?? []) as Organization[];
@@ -158,15 +158,24 @@ export default function OrganizationsPage() {
     saveMutation.mutate(form);
   }
 
-  // Filter
-  const filtered = (orgs ?? []).filter((o) => {
+  // Filter & fixed sort by code (natural sorting)
+  const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return (
-      o.name.toLowerCase().includes(q) ||
-      (o.code?.toLowerCase().includes(q) ?? false) ||
-      (o.contact_name?.toLowerCase().includes(q) ?? false)
-    );
-  });
+    return (orgs ?? [])
+      .filter((o) => {
+        return (
+          o.name.toLowerCase().includes(q) ||
+          (o.code?.toLowerCase().includes(q) ?? false) ||
+          (o.contact_name?.toLowerCase().includes(q) ?? false)
+        );
+      })
+      .sort((a, b) =>
+        (a.code || "").localeCompare(b.code || "", undefined, {
+          numeric: true,
+          sensitivity: "base",
+        })
+      );
+  }, [orgs, search]);
 
   return (
     <div className="space-y-6">

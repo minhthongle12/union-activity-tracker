@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type {
@@ -72,7 +72,6 @@ async function fetchCriteria(): Promise<(CriterionLibrary & { category?: Criteri
   const { data, error } = await supabase
     .from("criteria_library")
     .select("*, category:criteria_categories(*)")
-    .order("sort_order", { ascending: true })
     .order("code", { ascending: true });
   if (error) throw error;
   return data as (CriterionLibrary & { category?: CriteriaCategory | null })[];
@@ -186,22 +185,33 @@ export default function CriteriaPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["criteria_library"] });
-      toast.success("Đã cập nhật trạng thái");
+      queryClient.invalidateQueries({ queryKey: ["user_period_criteria"] });
+      queryClient.invalidateQueries({ queryKey: ["user_master_library_preview"] });
+      queryClient.invalidateQueries({ queryKey: ["admin_review_queue"] });
+      queryClient.invalidateQueries({ queryKey: ["user_results_criteria"] });
+      toast.success("Đã cập nhật trạng thái tiêu chí");
     },
     onError: (err: Error) => toast.error("Lỗi: " + err.message),
   });
 
   const deleteCriterionMutation = useMutation({
     mutationFn: async (id: string) => {
+      // 1. Also clean up any period_criteria referencing this criterion
+      await supabase.from("period_criteria").delete().eq("source_criteria_id", id);
+      // 2. Delete from criteria_library
       const { error } = await supabase.from("criteria_library").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["criteria_library"] });
-      toast.success("Đã xóa tiêu chí");
+      queryClient.invalidateQueries({ queryKey: ["user_period_criteria"] });
+      queryClient.invalidateQueries({ queryKey: ["user_master_library_preview"] });
+      queryClient.invalidateQueries({ queryKey: ["admin_review_queue"] });
+      queryClient.invalidateQueries({ queryKey: ["user_results_criteria"] });
+      toast.success("Đã xóa tiêu chí khỏi hệ thống");
     },
     onError: (err: Error) => {
-      toast.error("Không thể xóa tiêu chí này (có thể đã được dùng trong đợt đánh giá). Vui lòng chuyển sang Tạm khóa.");
+      toast.error("Không thể xóa tiêu chí này. Vui lòng chuyển sang Tạm khóa.");
     },
   });
 
@@ -317,20 +327,26 @@ export default function CriteriaPage() {
     setCategoryDialogOpen(true);
   }
 
-  // Filter criteria list
-  const filteredCriteria = (criteria ?? []).filter((item) => {
-    const q = search.toLowerCase();
-    const matchSearch =
-      item.code.toLowerCase().includes(q) ||
-      item.title.toLowerCase().includes(q) ||
-      (item.responsible_unit?.toLowerCase().includes(q) ?? false);
-    const matchCat = selectedCategory === "all" || item.category_id === selectedCategory;
-    const matchStatus =
-      selectedStatus === "all" ||
-      (selectedStatus === "active" && item.is_active) ||
-      (selectedStatus === "inactive" && !item.is_active);
-    return matchSearch && matchCat && matchStatus;
-  });
+  // Filter and natural sort criteria list by code (e.g. 1.1, 1.2, 1.10, 2.1)
+  const filteredCriteria = useMemo(() => {
+    const list = (criteria ?? []).filter((item) => {
+      const q = search.toLowerCase();
+      const matchSearch =
+        item.code.toLowerCase().includes(q) ||
+        item.title.toLowerCase().includes(q) ||
+        (item.responsible_unit?.toLowerCase().includes(q) ?? false);
+      const matchCat = selectedCategory === "all" || item.category_id === selectedCategory;
+      const matchStatus =
+        selectedStatus === "all" ||
+        (selectedStatus === "active" && item.is_active) ||
+        (selectedStatus === "inactive" && !item.is_active);
+      return matchSearch && matchCat && matchStatus;
+    });
+
+    return list.sort((a, b) =>
+      (a.code || "").localeCompare(b.code || "", undefined, { numeric: true, sensitivity: "base" })
+    );
+  }, [criteria, search, selectedCategory, selectedStatus]);
 
   return (
     <div className="space-y-6">
@@ -431,7 +447,9 @@ export default function CriteriaPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[90px]">Mã</TableHead>
+                        <TableHead className="w-[100px]">
+                          <span className="font-semibold text-slate-800">Mã tiêu chí</span>
+                        </TableHead>
                         <TableHead>Nội dung tiêu chí</TableHead>
                         <TableHead className="w-[180px]">Nhóm</TableHead>
                         <TableHead className="w-[90px] text-center">Điểm tối đa</TableHead>

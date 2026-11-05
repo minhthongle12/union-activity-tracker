@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type {
@@ -48,6 +49,7 @@ import {
   Building2,
   ClipboardList,
   CheckCircle2,
+  CheckSquare,
   Clock,
   Archive,
   Lock,
@@ -76,9 +78,12 @@ async function fetchCriteriaLibrary(): Promise<CriterionLibrary[]> {
     .from("criteria_library")
     .select("*, category:criteria_categories(*)")
     .eq("is_active", true)
-    .order("sort_order", { ascending: true });
+    .order("code", { ascending: true });
   if (error) throw error;
-  return (data ?? []) as any[];
+  const list = (data ?? []) as any[];
+  return list.sort((a, b) =>
+    (a.code || "").localeCompare(b.code || "", undefined, { numeric: true, sensitivity: "base" })
+  );
 }
 
 async function fetchOrganizations(): Promise<Organization[]> {
@@ -86,7 +91,7 @@ async function fetchOrganizations(): Promise<Organization[]> {
     .from("organizations")
     .select("*")
     .eq("is_active", true)
-    .order("name", { ascending: true });
+    .order("code", { ascending: true });
   if (error) throw error;
   return (data ?? []) as Organization[];
 }
@@ -107,6 +112,7 @@ async function fetchPeriodDetails(periodId: string) {
 // ============================================================
 
 export default function PeriodsPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -520,9 +526,14 @@ export default function PeriodsPage() {
                   key={period.id}
                   className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/60 transition-colors"
                 >
-                  <div className="space-y-1 max-w-2xl">
+                  <div
+                    className="space-y-1 max-w-2xl cursor-pointer group"
+                    onClick={() => navigate(`/admin/review?period=${period.id}`)}
+                  >
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-slate-900 text-base">{period.name}</h3>
+                      <h3 className="font-semibold text-slate-900 text-base group-hover:text-blue-700 transition-colors">
+                        {period.name}
+                      </h3>
                       {statusBadge(period.status)}
                     </div>
                     {period.description && (
@@ -546,6 +557,15 @@ export default function PeriodsPage() {
 
                   {/* Actions */}
                   <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    <Button
+                      size="sm"
+                      className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5 shadow-2xs font-medium"
+                      onClick={() => navigate(`/admin/review?period=${period.id}`)}
+                    >
+                      <CheckSquare className="h-3.5 w-3.5" />
+                      Thẩm định
+                    </Button>
+
                     <Button
                       variant="outline"
                       size="sm"
@@ -750,10 +770,27 @@ export default function PeriodsPage() {
       <Dialog open={!!configPeriod} onOpenChange={(o) => !o && setConfigPeriod(null)}>
         <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Settings2 className="h-5 w-5 text-blue-600" />
-              Cấu hình đợt: {configPeriod?.name}
-            </DialogTitle>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <DialogTitle className="flex items-center gap-2">
+                <Settings2 className="h-5 w-5 text-blue-600" />
+                Cấu hình đợt: {configPeriod?.name}
+              </DialogTitle>
+              {configPeriod && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 text-blue-700 border-blue-200 hover:bg-blue-50 font-medium"
+                  onClick={() => {
+                    const pid = configPeriod.id;
+                    setConfigPeriod(null);
+                    navigate(`/admin/review?period=${pid}`);
+                  }}
+                >
+                  <CheckSquare className="h-3.5 w-3.5 text-blue-600" />
+                  Vào thẩm định đợt này
+                </Button>
+              )}
+            </div>
             <DialogDescription>
               Chọn các tiêu chí trong thư viện áp dụng cho đợt này và các đơn vị tham gia đánh giá.
             </DialogDescription>

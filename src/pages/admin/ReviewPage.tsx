@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
@@ -42,6 +43,8 @@ import {
   ShieldCheck,
   ChevronDown,
   ChevronUp,
+  ArrowLeft,
+  ArrowRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -77,13 +80,84 @@ async function fetchPeriods(): Promise<EvaluationPeriod[]> {
   return (data ?? []) as EvaluationPeriod[];
 }
 
+async function fetchAllPeriodsStats() {
+  const [critRes, orgPeriodRes, subRes] = await Promise.all([
+    supabase.from("period_criteria").select("id, period_id"),
+    supabase.from("organization_periods").select("id, period_id, organization_id"),
+    supabase.from("submissions").select("id, organization_period_id, period_criteria_id, status"),
+  ]);
+
+  const critByPeriod: Record<string, number> = {};
+  (critRes.data ?? []).forEach((c) => {
+    critByPeriod[c.period_id] = (critByPeriod[c.period_id] || 0) + 1;
+  });
+
+  const orgPeriodMap = new Map<string, string>();
+  const orgCountByPeriod: Record<string, number> = {};
+  (orgPeriodRes.data ?? []).forEach((op) => {
+    orgPeriodMap.set(op.id, op.period_id);
+    orgCountByPeriod[op.period_id] = (orgCountByPeriod[op.period_id] || 0) + 1;
+  });
+
+  const statsByPeriod: Record<
+    string,
+    { submitted: number; verified: number; revision_requested: number; total: number }
+  > = {};
+
+  (subRes.data ?? []).forEach((s) => {
+    const periodId = orgPeriodMap.get(s.organization_period_id);
+    if (!periodId) return;
+    if (!statsByPeriod[periodId]) {
+      statsByPeriod[periodId] = { submitted: 0, verified: 0, revision_requested: 0, total: 0 };
+    }
+    const stat = statsByPeriod[periodId];
+    stat.total++;
+    if (s.status === "submitted") stat.submitted++;
+    else if (s.status === "verified") stat.verified++;
+    else if (s.status === "revision_requested") stat.revision_requested++;
+  });
+
+  return { critByPeriod, orgCountByPeriod, statsByPeriod };
+}
+
 async function fetchOrganizations(): Promise<Organization[]> {
   const { data } = await supabase
     .from("organizations")
     .select("*")
     .eq("is_active", true)
-    .order("name", { ascending: true });
+    .order("code", { ascending: true });
   return (data ?? []) as Organization[];
+}
+
+// Helpers
+function renderPeriodStatusBadge(status: string) {
+  switch (status) {
+    case "active":
+      return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">Đang hoạt động</Badge>;
+    case "closed":
+      return <Badge className="bg-amber-100 text-amber-800 border-amber-200">Đã kết thúc</Badge>;
+    case "archived":
+      return <Badge className="bg-slate-100 text-slate-700 border-slate-200">Đã lưu trữ</Badge>;
+    case "draft":
+    default:
+      return <Badge className="bg-slate-100 text-slate-700 border-slate-200">Bản nháp</Badge>;
+  }
+}
+
+function formatDateDisplay(isoStr: string | null | undefined): string {
+  if (!isoStr) return "Chưa đặt";
+  try {
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return isoStr;
+    const hours = String(d.getHours()).padStart(2, "0");
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    return `${hours}:${minutes} ${day}/${month}/${year}`;
+  } catch {
+    return isoStr;
+  }
 }
 
 async function fetchReviewQueue(periodId?: string, orgId?: string) {
@@ -98,13 +172,24 @@ async function fetchReviewQueue(periodId?: string, orgId?: string) {
     };
   }
 
-  // 1. Fetch period criteria
-  const { data: criteria } = await supabase
-    .from("period_criteria")
-    .select("*")
-    .eq("period_id", periodId)
-    .order("sort_order", { ascending: true })
-    .order("code_snapshot", { ascending: true });
+  // 1. Fetch period criteria & check active status in criteria_library
+  const [critRes, libRes] = await Promise.all([
+    supabase
+      .from("period_criteria")
+      .select("*")
+      .eq("period_id", periodId)
+      .order("sort_order", { ascending: true })
+      .order("code_snapshot", { ascending: true }),
+    supabase
+      .from("criteria_library")
+      .select("id, is_active"),
+  ]);
+
+  const libMap = new Map((libRes.data ?? []).map((l) => [l.id, l.is_active]));
+  const criteria = (critRes.data ?? []).filter((c) => {
+    if (!c.source_criteria_id) return true;
+    return libMap.get(c.source_criteria_id) === true;
+  }) as PeriodCriterion[];
 
   // 2. Fetch organization_periods with organization details
   let orgPeriodQuery = supabase
@@ -166,26 +251,34 @@ async function fetchReviewQueue(periodId?: string, orgId?: string) {
 export default function ReviewPage() {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const [selectedPeriodId, setSelectedPeriodId] = useState<string>("");
+  const periodParam = searchParams.get("period");
+
+  // Overview states (Option B view)
+  const [overviewSearch, setOverviewSearch] = useState("");
+  const [overviewStatus, setOverviewStatus] = useState("all");
+
+  // Detailed review states
   const [selectedOrgId, setSelectedOrgId] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [search, setSearch] = useState("");
 
   // Queries
-  const { data: periods } = useQuery({
+  const { data: periods, isLoading: periodsLoading } = useQuery({
     queryKey: ["admin_review_periods"],
     queryFn: fetchPeriods,
   });
 
-  // Set default period once loaded
-  useMemo(() => {
-    if (!periods || periods.length === 0) return;
-    const act = periods.find((p) => p.status === "active") || periods[0];
-    if (!selectedPeriodId && act) {
-      setSelectedPeriodId(act.id);
-    }
-  }, [periods, selectedPeriodId]);
+  const { data: allPeriodsStats } = useQuery({
+    queryKey: ["admin_all_periods_stats"],
+    queryFn: fetchAllPeriodsStats,
+  });
+
+  const currentPeriod = useMemo(() => {
+    if (!periods || !periodParam) return null;
+    return periods.find((p) => p.id === periodParam) || null;
+  }, [periods, periodParam]);
 
   const { data: organizations } = useQuery({
     queryKey: ["admin_review_organizations"],
@@ -193,9 +286,9 @@ export default function ReviewPage() {
   });
 
   const { data: queueData, isLoading: queueLoading, refetch } = useQuery({
-    queryKey: ["admin_review_queue", selectedPeriodId, selectedOrgId],
-    queryFn: () => fetchReviewQueue(selectedPeriodId, selectedOrgId),
-    enabled: !!selectedPeriodId,
+    queryKey: ["admin_review_queue", currentPeriod?.id, selectedOrgId],
+    queryFn: () => fetchReviewQueue(currentPeriod?.id, selectedOrgId),
+    enabled: !!currentPeriod?.id,
   });
 
   // Group Criteria with all assigned Organizations
@@ -470,37 +563,252 @@ export default function ReviewPage() {
     refetch();
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-          Thẩm định & xác thực
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Hội đồng thẩm định xem xét minh chứng của từng đơn vị, chấm điểm chính thức và phê duyệt tiêu chí
-        </p>
-      </div>
+  // Filter for View 1 (Periods Overview)
+  const filteredPeriodsList = useMemo(() => {
+    if (!periods) return [];
+    return periods.filter((p) => {
+      const matchSearch =
+        p.name.toLowerCase().includes(overviewSearch.toLowerCase()) ||
+        (p.description && p.description.toLowerCase().includes(overviewSearch.toLowerCase()));
+      if (!matchSearch) return false;
+      if (overviewStatus !== "all" && p.status !== overviewStatus) return false;
+      return true;
+    });
+  }, [periods, overviewSearch, overviewStatus]);
 
-      {/* Top Filter Bar */}
-      <Card className="border-slate-200 shadow-2xs">
-        <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+  // ============================================================
+  // VIEW 1: EVALUATION PERIODS OVERVIEW (When no period is selected)
+  // Tùy chọn B: Hiển thị các đợt mới nhất lên đầu, click vào đợt để thẩm định
+  // ============================================================
+  if (!currentPeriod) {
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <span className="text-xs font-semibold text-slate-700 block mb-1">Đợt đánh giá</span>
-            <Select value={selectedPeriodId} onValueChange={setSelectedPeriodId}>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+              Thẩm định & xác thực
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Chọn đợt đánh giá để xem danh sách tiêu chí, thẩm định hồ sơ minh chứng và chấm điểm cho các đơn vị Đoàn cơ sở
+            </p>
+          </div>
+        </div>
+
+        {/* Filter Bar for Overview */}
+        <Card className="border-slate-200 shadow-2xs">
+          <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Tìm đợt đánh giá theo tên, năm..."
+                value={overviewSearch}
+                onChange={(e) => setOverviewSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+
+            <Select value={overviewStatus} onValueChange={setOverviewStatus}>
               <SelectTrigger>
-                <SelectValue placeholder="Chọn đợt đánh giá" />
+                <SelectValue placeholder="Trạng thái đợt" />
               </SelectTrigger>
               <SelectContent>
-                {(periods ?? []).map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
+                <SelectItem value="all">Tất cả trạng thái</SelectItem>
+                <SelectItem value="active">Đang hoạt động</SelectItem>
+                <SelectItem value="closed">Đã kết thúc</SelectItem>
+                <SelectItem value="draft">Bản nháp</SelectItem>
+                <SelectItem value="archived">Đã lưu trữ</SelectItem>
               </SelectContent>
             </Select>
-          </div>
+          </CardContent>
+        </Card>
 
+        {/* Periods Grid */}
+        {periodsLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {[1, 2, 3].map((i) => (
+              <Card key={i} className="animate-pulse p-6 space-y-4">
+                <div className="h-6 bg-slate-200 rounded w-3/4" />
+                <div className="h-4 bg-slate-100 rounded w-1/2" />
+                <div className="h-16 bg-slate-50 rounded" />
+                <div className="h-9 bg-slate-200 rounded" />
+              </Card>
+            ))}
+          </div>
+        ) : filteredPeriodsList.length === 0 ? (
+          <Card className="p-12 text-center text-sm text-muted-foreground border-dashed">
+            <Calendar className="h-12 w-12 mx-auto mb-3 text-slate-300" />
+            <p className="font-medium text-slate-700">Không tìm thấy đợt đánh giá nào</p>
+            <p className="text-xs text-slate-400 mt-1">
+              {overviewSearch || overviewStatus !== "all"
+                ? "Thử tìm kiếm với từ khóa khác hoặc kiểm tra lại bộ lọc trạng thái."
+                : "Chưa có đợt đánh giá nào được tạo trong hệ thống."}
+            </p>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {filteredPeriodsList.map((p) => {
+              const critCount = allPeriodsStats?.critByPeriod[p.id] ?? 0;
+              const orgCount = allPeriodsStats?.orgCountByPeriod[p.id] ?? 0;
+              const pStats = allPeriodsStats?.statsByPeriod[p.id] ?? {
+                submitted: 0,
+                verified: 0,
+                revision_requested: 0,
+                total: 0,
+              };
+
+              return (
+                <Card
+                  key={p.id}
+                  onClick={() => setSearchParams({ period: p.id })}
+                  className="border border-slate-200 bg-white hover:border-blue-400 hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col justify-between rounded-xl overflow-hidden group"
+                >
+                  <CardContent className="p-5 space-y-4">
+                    {/* Top: Name & Badges */}
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="font-semibold text-slate-900 group-hover:text-blue-700 transition-colors line-clamp-2 text-base">
+                          {p.name}
+                        </h3>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {renderPeriodStatusBadge(p.status)}
+                      </div>
+                      {p.description && (
+                        <p className="text-xs text-muted-foreground line-clamp-2 pt-0.5">
+                          {p.description}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Dates block */}
+                    <div className="bg-slate-50/80 rounded-lg p-3 text-xs space-y-1.5 border border-slate-100">
+                      <div className="flex items-center justify-between text-slate-600">
+                        <span className="flex items-center gap-1.5">
+                          <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                          Bắt đầu:
+                        </span>
+                        <span className="font-medium text-slate-800">{formatDateDisplay(p.start_at)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-slate-600">
+                        <span className="flex items-center gap-1.5">
+                          <Clock className="h-3.5 w-3.5 text-amber-500" />
+                          Hạn nộp MC:
+                        </span>
+                        <span className="font-medium text-amber-800">{formatDateDisplay(p.submission_deadline)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-slate-600">
+                        <span className="flex items-center gap-1.5">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-blue-500" />
+                          Hạn thẩm định:
+                        </span>
+                        <span className="font-medium text-blue-800">{formatDateDisplay(p.review_deadline)}</span>
+                      </div>
+                    </div>
+
+                    {/* Stats pills */}
+                    <div className="space-y-2 pt-1">
+                      <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                        <div className="bg-orange-50 border border-orange-200 rounded-lg p-2">
+                          <span className="text-[10px] text-orange-700 uppercase font-semibold block">Chờ thẩm định</span>
+                          <span className="text-base font-bold text-orange-900">{pStats.submitted}</span>
+                        </div>
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2">
+                          <span className="text-[10px] text-emerald-700 uppercase font-semibold block">Đã xác thực</span>
+                          <span className="text-base font-bold text-emerald-900">{pStats.verified}</span>
+                        </div>
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-2">
+                          <span className="text-[10px] text-red-700 uppercase font-semibold block">Cần bổ sung</span>
+                          <span className="text-base font-bold text-red-900">{pStats.revision_requested}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 px-1 pt-1">
+                        <span className="flex items-center gap-1">
+                          <Layers className="h-3.5 w-3.5 text-slate-400" />
+                          {critCount} tiêu chí
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Building2 className="h-3.5 w-3.5 text-slate-400" />
+                          {orgCount} đơn vị
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Action Button */}
+                    <div className="pt-2">
+                      <Button
+                        size="sm"
+                        className="w-full bg-blue-600 group-hover:bg-blue-700 text-white gap-2 shadow-2xs font-medium"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSearchParams({ period: p.id });
+                        }}
+                      >
+                        <CheckSquare className="h-4 w-4" />
+                        Vào thẩm định đợt này
+                        <ArrowRight className="h-3.5 w-3.5 ml-auto group-hover:translate-x-1 transition-transform" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Top Header with Back button and Quick Period Switcher */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2 border-b border-slate-200">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSearchParams({})}
+              className="gap-1.5 text-xs text-slate-700 hover:text-slate-900 hover:bg-slate-100"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Danh sách các đợt đánh giá
+            </Button>
+            {renderPeriodStatusBadge(currentPeriod.status)}
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+            Thẩm định: {currentPeriod.name}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Hội đồng thẩm định xem xét minh chứng của từng đơn vị, chấm điểm chính thức và phê duyệt tiêu chí
+          </p>
+        </div>
+
+        {/* Quick Period Switcher */}
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-xs text-slate-500 font-medium whitespace-nowrap">Đổi đợt:</span>
+          <Select
+            value={currentPeriod.id}
+            onValueChange={(val) => setSearchParams({ period: val })}
+          >
+            <SelectTrigger className="w-[220px] text-xs">
+              <SelectValue placeholder="Chọn đợt khác" />
+            </SelectTrigger>
+            <SelectContent>
+              {(periods ?? []).map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Filter Bar for this Period */}
+      <Card className="border-slate-200 shadow-2xs">
+        <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <span className="text-xs font-semibold text-slate-700 block mb-1">Đoàn cơ sở</span>
             <Select value={selectedOrgId} onValueChange={setSelectedOrgId}>
@@ -928,6 +1236,11 @@ function AdminUnitGradingDetail({
   const maxScore = criterion.max_score_snapshot ?? 4;
   const selfScore = unit.currentRevision?.self_score ?? maxScore;
 
+  const hasDoc1 = !!criterion.req_doc1;
+  const hasDoc2 = !!criterion.req_doc2;
+  const hasLink3 = !!criterion.req_link3;
+  const hasAnyReq = hasDoc1 || hasDoc2 || hasLink3;
+
   const [score, setScore] = useState<number>(
     unit.submission?.admin_score ?? selfScore
   );
@@ -1128,33 +1441,53 @@ function AdminUnitGradingDetail({
             Minh chứng đã nộp của đơn vị
           </span>
           <span className="text-xs text-slate-500">
-            Tổng cộng: {unit.evidenceItems.length} minh chứng
+            {hasAnyReq ? `Tổng cộng: ${unit.evidenceItems.length} minh chứng` : "Không yêu cầu"}
           </span>
         </div>
 
-        {/* Category 1: Văn bản triển khai */}
-        <EvidenceReviewSubCard
-          title="Văn bản triển khai"
-          badgeText="Văn bản"
-          items={doc1Items}
-          onViewFile={handleViewFile}
-        />
+        {!hasAnyReq ? (
+          <div className="p-6 text-center bg-[#fbfcfd] rounded-lg border border-dashed border-slate-200 space-y-1">
+            <CheckCircle2 className="h-6 w-6 text-emerald-600 mx-auto mb-1" />
+            <h5 className="font-semibold text-slate-800 text-xs sm:text-sm">
+              Tiêu chí không yêu cầu nộp minh chứng
+            </h5>
+            <p className="text-[11px] text-slate-500">
+              Hội đồng chỉ cần thẩm định và chấm điểm dựa trên kết quả thực tế của đơn vị.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Category 1: Văn bản triển khai */}
+            {hasDoc1 && (
+              <EvidenceReviewSubCard
+                title="Văn bản triển khai"
+                badgeText="Văn bản"
+                items={doc1Items}
+                onViewFile={handleViewFile}
+              />
+            )}
 
-        {/* Category 2: Báo cáo tóm tắt kết quả */}
-        <EvidenceReviewSubCard
-          title="Báo cáo tóm tắt kết quả."
-          badgeText="Báo cáo"
-          items={doc2Items}
-          onViewFile={handleViewFile}
-        />
+            {/* Category 2: Báo cáo tóm tắt kết quả */}
+            {hasDoc2 && (
+              <EvidenceReviewSubCard
+                title="Báo cáo tóm tắt kết quả."
+                badgeText="Báo cáo"
+                items={doc2Items}
+                onViewFile={handleViewFile}
+              />
+            )}
 
-        {/* Category 3: Tin bài về hoạt động */}
-        <EvidenceReviewSubCard
-          title="Tin bài về hoạt động (hình ảnh phải rõ nội dung, thời gian tổ chức)."
-          badgeText="Liên kết"
-          items={link3Items}
-          onViewFile={handleViewFile}
-        />
+            {/* Category 3: Tin bài về hoạt động */}
+            {hasLink3 && (
+              <EvidenceReviewSubCard
+                title="Tin bài về hoạt động (hình ảnh phải rõ nội dung, thời gian tổ chức)."
+                badgeText="Liên kết"
+                items={link3Items}
+                onViewFile={handleViewFile}
+              />
+            )}
+          </>
+        )}
       </div>
 
       {/* DIALOG: ADMIN REOPEN SUBMISSION */}

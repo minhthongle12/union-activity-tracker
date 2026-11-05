@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import type {
@@ -25,52 +26,53 @@ import {
   Search,
   CheckCircle2,
   AlertCircle,
-  FileCheck,
   Building,
   Calendar,
   Layers,
-  ChevronDown,
-  ChevronUp,
   Save,
   Send,
   Loader2,
+  ArrowLeft,
+  ArrowRight,
+  Clock,
+  Sparkles,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 // ============================================================
 // Data Fetching
 // ============================================================
 
-async function fetchActivePeriod(): Promise<EvaluationPeriod | null> {
-  const { data } = await supabase
+async function fetchAllPeriods(): Promise<EvaluationPeriod[]> {
+  const { data, error } = await supabase
     .from("evaluation_periods")
     .select("*")
-    .eq("status", "active")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (!data) {
-    // If no active, try draft or any period
-    const { data: anyPeriod } = await supabase
-      .from("evaluation_periods")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    return anyPeriod as EvaluationPeriod | null;
-  }
-  return data as EvaluationPeriod;
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as EvaluationPeriod[];
 }
 
 async function fetchPeriodCriteria(periodId: string): Promise<PeriodCriterion[]> {
-  const { data, error } = await supabase
-    .from("period_criteria")
-    .select("*")
-    .eq("period_id", periodId)
-    .order("sort_order", { ascending: true });
-  if (error) throw error;
-  return (data ?? []) as PeriodCriterion[];
+  const [critRes, libRes] = await Promise.all([
+    supabase
+      .from("period_criteria")
+      .select("*")
+      .eq("period_id", periodId)
+      .order("sort_order", { ascending: true }),
+    supabase
+      .from("criteria_library")
+      .select("id, is_active"),
+  ]);
+
+  if (critRes.error) throw critRes.error;
+  const libMap = new Map((libRes.data ?? []).map((l) => [l.id, l.is_active]));
+
+  // Exclude criteria that were deleted from library or marked inactive (locked)
+  return (critRes.data ?? []).filter((c) => {
+    if (!c.source_criteria_id) return true;
+    return libMap.get(c.source_criteria_id) === true;
+  }) as PeriodCriterion[];
 }
 
 async function fetchUserSubmissions(periodId: string, orgId?: string | null) {
@@ -94,7 +96,10 @@ async function fetchUserSubmissions(periodId: string, orgId?: string | null) {
   const subIds = (subs ?? []).map((s) => s.id);
 
   const [revRes, evRes] = await Promise.all([
-    supabase.from("submission_revisions").select("*").in("submission_id", subIds.length ? subIds : ["00000000-0000-0000-0000-000000000000"]),
+    supabase
+      .from("submission_revisions")
+      .select("*")
+      .in("submission_id", subIds.length ? subIds : ["00000000-0000-0000-0000-000000000000"]),
     supabase.from("evidence_items").select("*"),
   ]);
 
@@ -117,6 +122,23 @@ async function fetchMasterLibraryCriteria(): Promise<any[]> {
   return data ?? [];
 }
 
+// Format date helper
+function formatDateDisplay(isoStr: string | null | undefined): string {
+  if (!isoStr) return "Chưa đặt";
+  try {
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return isoStr;
+    const hours = String(d.getHours()).padStart(2, "0");
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    return `${hours}:${minutes} ${day}/${month}/${year}`;
+  } catch {
+    return isoStr;
+  }
+}
+
 // ============================================================
 // Main Page Component
 // ============================================================
@@ -124,39 +146,56 @@ async function fetchMasterLibraryCriteria(): Promise<any[]> {
 export default function UserCriteriaPage() {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
 
+  const periodParam = searchParams.get("period");
+
+  // Filter & Search inside Criteria View
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
 
-  // Fetch active period
-  const { data: period, isLoading: periodLoading } = useQuery({
-    queryKey: ["user_active_period"],
-    queryFn: fetchActivePeriod,
+  // Filter inside Periods Overview
+  const [periodSearch, setPeriodSearch] = useState("");
+  const [periodStatusFilter, setPeriodStatusFilter] = useState("all");
+
+  // 1. Fetch ALL evaluation periods sorted newest first
+  const { data: allPeriods, isLoading: periodsLoading } = useQuery({
+    queryKey: ["user_all_periods"],
+    queryFn: fetchAllPeriods,
   });
 
-  // Fetch period criteria
+  // Current selected period (if period query param is present)
+  const selectedPeriod = useMemo(() => {
+    if (!allPeriods || allPeriods.length === 0) return null;
+    if (periodParam) {
+      return allPeriods.find((p) => p.id === periodParam) || null;
+    }
+    return null;
+  }, [allPeriods, periodParam]);
+
+  // 2. Fetch criteria for selected period
   const { data: criteria, isLoading: criteriaLoading } = useQuery({
-    queryKey: ["user_period_criteria", period?.id],
-    queryFn: () => (period ? fetchPeriodCriteria(period.id) : []),
-    enabled: !!period?.id,
+    queryKey: ["user_period_criteria", selectedPeriod?.id],
+    queryFn: () => (selectedPeriod ? fetchPeriodCriteria(selectedPeriod.id) : []),
+    enabled: !!selectedPeriod?.id,
   });
 
-  // Fetch user submissions
+  // 3. Fetch submissions for selected period
   const { data: subData, isLoading: subLoading, refetch: refetchSubmissions } = useQuery({
-    queryKey: ["user_submissions", period?.id, profile?.organization_id],
-    queryFn: () => fetchUserSubmissions(period?.id || "", profile?.organization_id),
-    enabled: !!period?.id,
+    queryKey: ["user_submissions", selectedPeriod?.id, profile?.organization_id],
+    queryFn: () => fetchUserSubmissions(selectedPeriod?.id || "", profile?.organization_id),
+    enabled: !!selectedPeriod?.id,
   });
 
-  // Fetch master criteria library (for reference preview when period criteria is not yet configured)
-  const { data: libraryCriteria, isLoading: libraryLoading } = useQuery({
+  // 4. Fetch master library fallback if period criteria is not configured
+  const { data: libraryCriteria } = useQuery({
     queryKey: ["user_master_library_preview"],
     queryFn: fetchMasterLibraryCriteria,
-    enabled: (!period || (criteria && criteria.length === 0)),
+    enabled: !selectedPeriod || (criteria && criteria.length === 0),
   });
 
-  // Combine data into CriterionWithSubmission
+  // Combine criteria with user submissions
   const criteriaItems: CriterionWithSubmission[] = useMemo(() => {
     return (criteria ?? []).map((c) => {
       const sub = subData?.submissions.find((s) => s.period_criteria_id === c.id);
@@ -172,15 +211,17 @@ export default function UserCriteriaPage() {
     });
   }, [criteria, subData]);
 
-  // Calculations for stats & progress
+  // Progress metrics
   const totalCriteria = criteriaItems.length;
-  const submittedCount = criteriaItems.filter((i) => i.submission?.status === "submitted" || i.submission?.status === "verified").length;
+  const submittedCount = criteriaItems.filter(
+    (i) => i.submission?.status === "submitted" || i.submission?.status === "verified"
+  ).length;
   const verifiedCount = criteriaItems.filter((i) => i.submission?.status === "verified").length;
   const revisionCount = criteriaItems.filter((i) => i.submission?.status === "revision_requested").length;
   const remainingCount = totalCriteria - submittedCount;
   const progressPercent = totalCriteria > 0 ? Math.round((submittedCount / totalCriteria) * 100) : 0;
 
-  // Filtered list
+  // Filtered criteria
   const filteredItems = criteriaItems.filter((item) => {
     const q = search.toLowerCase();
     const matchSearch =
@@ -202,6 +243,17 @@ export default function UserCriteriaPage() {
     return Array.from(set);
   }, [criteriaItems]);
 
+  // Filtered periods in overview
+  const filteredPeriods = useMemo(() => {
+    return (allPeriods ?? []).filter((p) => {
+      const matchText = p.name.toLowerCase().includes(periodSearch.toLowerCase());
+      const matchStatus =
+        periodStatusFilter === "all" || p.status === periodStatusFilter;
+      return matchText && matchStatus;
+    });
+  }, [allPeriods, periodSearch, periodStatusFilter]);
+
+  // Guard: User must belong to an organization
   if (profile?.role === "user" && !profile?.organization_id) {
     return (
       <div className="space-y-6">
@@ -240,7 +292,7 @@ export default function UserCriteriaPage() {
     evidence: EvidenceItem[],
     targetStatus: "draft" | "submitted"
   ) => {
-    if (!period?.id || !profile?.organization_id) {
+    if (!selectedPeriod?.id || !profile?.organization_id) {
       throw new Error("Không tìm thấy thông tin đợt đánh giá hoặc đơn vị.");
     }
 
@@ -250,7 +302,7 @@ export default function UserCriteriaPage() {
       const { data: existingOp } = await supabase
         .from("organization_periods")
         .select("id")
-        .eq("period_id", period.id)
+        .eq("period_id", selectedPeriod.id)
         .eq("organization_id", profile.organization_id)
         .maybeSingle();
 
@@ -260,7 +312,7 @@ export default function UserCriteriaPage() {
         const { data: newOp, error: opErr } = await supabase
           .from("organization_periods")
           .insert({
-            period_id: period.id,
+            period_id: selectedPeriod.id,
             organization_id: profile.organization_id,
             status: "in_progress",
           })
@@ -299,7 +351,9 @@ export default function UserCriteriaPage() {
     }
 
     // 3. Create a new revision (PRD Part 4.9: Preserve every submission version)
-    const currentRevNumber = existingSub ? (subData?.revisions.filter(r => r.submission_id === submissionId).length || 0) : 0;
+    const currentRevNumber = existingSub
+      ? subData?.revisions.filter((r) => r.submission_id === submissionId).length || 0
+      : 0;
     const nextRevNumber = currentRevNumber + 1;
 
     const { data: newRev, error: revErr } = await supabase
@@ -347,7 +401,7 @@ export default function UserCriteriaPage() {
       new_values: { self_score: selfScore, revision_number: nextRevNumber, evidence_count: evidence.length },
     });
 
-    // 7. Notify Admins when a criterion is submitted
+    // 7. Notify Admins when submitted
     if (targetStatus === "submitted") {
       const { data: adminUsers } = await supabase
         .from("profiles")
@@ -369,7 +423,7 @@ export default function UserCriteriaPage() {
     }
   };
 
-  // User Actions: Save Draft
+  // User Action: Save Draft
   const handleSaveDraft = async (criterionId: string, selfScore: number, evidence: EvidenceItem[]) => {
     try {
       await persistSubmission(criterionId, selfScore, evidence, "draft");
@@ -381,7 +435,7 @@ export default function UserCriteriaPage() {
     }
   };
 
-  // User Actions: Submit Single
+  // User Action: Submit Single
   const handleSubmitCriterion = async (criterionId: string, selfScore: number, evidence: EvidenceItem[]) => {
     try {
       const isAlreadySubmitted = criteriaItems.find((i) => i.criterion.id === criterionId)?.submission?.status === "submitted";
@@ -398,7 +452,7 @@ export default function UserCriteriaPage() {
     }
   };
 
-  // User Actions: Submit All Eligible Criteria (Nộp bài thi chính thức)
+  // User Action: Submit All Eligible Criteria
   const handleSubmitAll = async () => {
     const eligible = criteriaItems.filter(
       (i) => (!i.submission || i.submission.status === "draft" || i.submission.status === "revision_requested")
@@ -407,7 +461,11 @@ export default function UserCriteriaPage() {
       toast.info("Tất cả tiêu chí đã được nộp hoặc đã được thẩm định.");
       return;
     }
-    if (!confirm(`Bạn có chắc chắn muốn nộp chính thức ${eligible.length} tiêu chí cho Hội đồng thẩm định? Sau khi nộp, trạng thái sẽ là "Đã nộp, Chờ xác thực".`)) {
+    if (
+      !confirm(
+        `Bạn có chắc chắn muốn nộp chính thức ${eligible.length} tiêu chí cho Hội đồng thẩm định? Sau khi nộp, trạng thái sẽ là "Đã nộp, Chờ xác thực".`
+      )
+    ) {
       return;
     }
 
@@ -426,7 +484,10 @@ export default function UserCriteriaPage() {
           .eq("id", subData.orgPeriodId);
       }
 
-      toast.success(`Đã nộp thành công ${eligible.length} tiêu chí! Hồ sơ đang chờ Ban Thường vụ thẩm định.`, { id: toastId });
+      toast.success(
+        `Đã nộp thành công ${eligible.length} tiêu chí! Hồ sơ đang chờ Ban Thường vụ thẩm định.`,
+        { id: toastId }
+      );
       await refetchSubmissions();
       await queryClient.invalidateQueries({ queryKey: ["user_submissions"] });
     } catch (err: any) {
@@ -434,14 +495,223 @@ export default function UserCriteriaPage() {
     }
   };
 
+  // ============================================================
+  // VIEW 1: PERIODS OVERVIEW (When no period is selected)
+  // Sắp xếp đợt mới nhất lên đầu, nhấn vào từng đợt để xem tiêu chí!
+  // ============================================================
+  if (!selectedPeriod) {
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+              Các đợt đánh giá thi đua
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
+              <Building className="h-4 w-4 text-blue-700" />
+              Đơn vị: <b className="text-slate-800">{profile?.display_name || "Đoàn cơ sở"}</b>
+              <span className="text-slate-300 hidden sm:inline">•</span>
+              <span className="text-slate-500">
+                Chọn đợt để xem bộ tiêu chí, tự chấm điểm và nộp minh chứng
+              </span>
+            </p>
+          </div>
+        </div>
+
+        {/* Filters & Search for Periods */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Tìm theo tên đợt đánh giá..."
+              value={periodSearch}
+              onChange={(e) => setPeriodSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+
+          <Select value={periodStatusFilter} onValueChange={setPeriodStatusFilter}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Trạng thái đợt" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả trạng thái</SelectItem>
+              <SelectItem value="active">Đang mở nộp bài</SelectItem>
+              <SelectItem value="closed">Đang thẩm định (Đã đóng nộp)</SelectItem>
+              <SelectItem value="archived">Đã kết thúc / Khóa</SelectItem>
+              <SelectItem value="draft">Dự thảo</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Periods Grid (Newest first) */}
+        {periodsLoading ? (
+          <div className="p-12 text-center text-sm text-muted-foreground space-y-2 bg-white rounded-xl border">
+            <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-600" />
+            <p>Đang tải danh sách các đợt đánh giá...</p>
+          </div>
+        ) : filteredPeriods.length === 0 ? (
+          <div className="p-16 text-center text-sm text-muted-foreground bg-white rounded-xl border space-y-3">
+            <Calendar className="h-10 w-10 text-slate-300 mx-auto" />
+            <p className="font-medium text-slate-700">Chưa có đợt đánh giá nào trong hệ thống.</p>
+            <p className="text-xs text-slate-400">
+              Quản trị viên chưa tạo hoặc chưa kích hoạt đợt đánh giá nào.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredPeriods.map((p) => {
+              const isActive = p.status === "active";
+              return (
+                <div
+                  key={p.id}
+                  onClick={() => setSearchParams({ period: p.id })}
+                  className={cn(
+                    "group relative rounded-xl border bg-white p-5 space-y-4 cursor-pointer transition-all duration-200 hover:shadow-md",
+                    isActive
+                      ? "border-emerald-200 hover:border-emerald-500 hover:ring-1 hover:ring-emerald-200"
+                      : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <Badge
+                      className={cn(
+                        "text-[11px] font-medium shadow-none",
+                        p.status === "active"
+                          ? "bg-emerald-600 hover:bg-emerald-600 text-white"
+                          : p.status === "closed"
+                          ? "bg-blue-600 hover:bg-blue-600 text-white"
+                          : p.status === "archived"
+                          ? "bg-slate-100 text-slate-700 border border-slate-300"
+                          : "bg-amber-100 text-amber-800 border border-amber-300"
+                      )}
+                    >
+                      {p.status === "active"
+                        ? "Đang mở nộp bài"
+                        : p.status === "closed"
+                        ? "Đang thẩm định"
+                        : p.status === "archived"
+                        ? "Đã kết thúc / Khóa"
+                        : "Dự thảo"}
+                    </Badge>
+
+                    <span className="text-[11px] text-slate-400 font-medium">
+                      Mới tạo: {new Date(p.created_at).toLocaleDateString("vi-VN")}
+                    </span>
+                  </div>
+
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-base leading-snug group-hover:text-blue-700 transition-colors">
+                      {p.name}
+                    </h3>
+                    {p.description && (
+                      <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                        {p.description}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Date details */}
+                  <div className="space-y-1.5 pt-3 border-t border-slate-100 text-xs text-slate-600">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500 flex items-center gap-1">
+                        <Calendar className="h-3.5 w-3.5 text-slate-400" /> Bắt đầu:
+                      </span>
+                      <span className="font-medium text-slate-800">
+                        {formatDateDisplay(p.start_at)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500 flex items-center gap-1">
+                        <Clock className="h-3.5 w-3.5 text-amber-600" /> Hạn nộp bài:
+                      </span>
+                      <span className="font-semibold text-slate-900">
+                        {formatDateDisplay(p.submission_deadline)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    className={cn(
+                      "w-full text-xs font-semibold gap-1.5 h-9 mt-1 rounded-lg transition-all",
+                      isActive
+                        ? "bg-[#2d325a] hover:bg-[#232746] text-white shadow-xs"
+                        : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200"
+                    )}
+                  >
+                    {isActive ? "Vào tự chấm & nộp minh chứng" : "Xem bộ tiêu chí & hồ sơ"}
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ============================================================
+  // VIEW 2: CRITERIA FOR SELECTED PERIOD
+  // Hiển thị bộ tiêu chí của đợt đã chọn, có nút quay lại danh sách
+  // và dropdown chuyển đợt tức thời!
+  // ============================================================
   return (
     <div className="space-y-6 pb-24">
-      {/* Page Header */}
+      {/* Top Navigation & Period Switcher Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-xs font-medium text-slate-600 hover:text-slate-900 gap-1.5 w-fit -ml-2"
+          onClick={() => setSearchParams({})}
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span>Danh sách các đợt đánh giá</span>
+        </Button>
+
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground hidden sm:inline">Chuyển đợt:</span>
+          <Select
+            value={selectedPeriod.id}
+            onValueChange={(newId) => setSearchParams({ period: newId })}
+          >
+            <SelectTrigger className="w-[280px] h-8 text-xs font-semibold bg-white">
+              <SelectValue placeholder="Chọn đợt khác..." />
+            </SelectTrigger>
+            <SelectContent>
+              {(allPeriods ?? []).map((p) => (
+                <SelectItem key={p.id} value={p.id} className="text-xs">
+                  {p.name} {p.status === "active" ? "• (Đang mở)" : `• (${p.status})`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Page Header of Selected Period */}
       <div className="space-y-1">
-        <div className="flex items-center gap-2 text-sm text-blue-700 font-semibold">
+        <div className="flex items-center gap-2 text-sm text-blue-700 font-semibold flex-wrap">
           <Calendar className="h-4 w-4" />
-          <span>{period?.name || "Đợt đánh giá công tác Đoàn"}</span>
-          <Badge className="bg-emerald-600 text-white text-[11px] ml-1">Đang mở nộp bài</Badge>
+          <span>{selectedPeriod.name}</span>
+          <Badge
+            className={cn(
+              "text-[11px] ml-1",
+              selectedPeriod.status === "active"
+                ? "bg-emerald-600 text-white"
+                : "bg-slate-200 text-slate-700"
+            )}
+          >
+            {selectedPeriod.status === "active" ? "Đang mở nộp bài" : selectedPeriod.status}
+          </Badge>
+          {selectedPeriod.submission_deadline && (
+            <span className="text-xs text-slate-500 font-normal">
+              (Hạn nộp: {formatDateDisplay(selectedPeriod.submission_deadline)})
+            </span>
+          )}
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">
           Bộ tiêu chí đánh giá
@@ -528,13 +798,13 @@ export default function UserCriteriaPage() {
 
       {/* Criteria Accordion List */}
       <div className="space-y-3">
-        {periodLoading || criteriaLoading || subLoading ? (
+        {criteriaLoading || subLoading ? (
           <div className="p-12 text-center text-sm text-muted-foreground space-y-2">
             <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-600" />
             <p>Đang tải danh sách tiêu chí đánh giá...</p>
           </div>
         ) : filteredItems.length === 0 ? (
-          (libraryCriteria && libraryCriteria.length > 0) ? (
+          libraryCriteria && libraryCriteria.length > 0 ? (
             <div className="space-y-4">
               <Card className="border-blue-200 bg-blue-50/70 p-4">
                 <div className="flex items-start gap-3">
@@ -544,85 +814,16 @@ export default function UserCriteriaPage() {
                       Đang hiển thị danh mục tiêu chí tham khảo ({libraryCriteria.length} tiêu chí gốc)
                     </p>
                     <p className="text-blue-800">
-                      Hiện tại chưa có đợt đánh giá nào được kích hoạt hoặc đơn vị của bạn chưa được phân bổ tiêu chí trong đợt hiện tại.
-                    </p>
-                    <p className="text-blue-700 font-medium">
-                      👉 Để Đoàn cơ sở có thể tự chấm điểm và nộp minh chứng, Quản trị viên cần vào mục <b>"Đợt đánh giá"</b> &gt; chọn <b>"Cấu hình tiêu chí"</b> &gt; nhấn <b>"Mở đợt" (Kích hoạt)</b>.
+                      Đợt đánh giá này chưa được phân bổ tiêu chí hoặc Quản trị viên chưa cấu hình áp dụng tiêu chí cho đợt.
                     </p>
                   </div>
                 </div>
               </Card>
-
-              <div className="space-y-3">
-                {libraryCriteria.map((lib: any) => (
-                  <Card key={lib.id} className="border-slate-200 shadow-2xs hover:border-slate-300 transition-colors">
-                    <CardContent className="p-4 space-y-2">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs font-bold px-2 py-0.5 bg-blue-100 text-blue-800 rounded">
-                              {lib.code}
-                            </span>
-                            <Badge variant="outline" className="text-[11px] text-slate-600">
-                              {lib.category?.name || "Chung"}
-                            </Badge>
-                          </div>
-                          <h4 className="text-sm font-bold text-slate-900 pt-1">
-                            {lib.title}
-                          </h4>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <span className="text-xs text-muted-foreground block">Điểm tối đa</span>
-                          <span className="text-base font-extrabold text-blue-700">
-                            {lib.max_score}đ
-                          </span>
-                        </div>
-                      </div>
-
-                      {lib.description && (
-                        <p className="text-xs text-slate-600">
-                          {lib.description}
-                        </p>
-                      )}
-
-                      {lib.scoring_guidelines && (
-                        <div className="p-2.5 rounded bg-slate-50 border border-slate-100 text-[11px] text-slate-700">
-                          <b>Hướng dẫn chấm:</b> {lib.scoring_guidelines}
-                        </div>
-                      )}
-
-                      <div className="flex items-center gap-2 pt-2 border-t border-slate-100 flex-wrap">
-                        <span className="text-[11px] font-medium text-slate-500">Yêu cầu minh chứng:</span>
-                        {lib.req_doc1 && (
-                          <Badge variant="secondary" className="bg-amber-50 text-amber-800 border-amber-200 text-[10px]">
-                            1. Văn bản triển khai
-                          </Badge>
-                        )}
-                        {lib.req_doc2 && (
-                          <Badge variant="secondary" className="bg-blue-50 text-blue-800 border-blue-200 text-[10px]">
-                            2. Báo cáo kết quả
-                          </Badge>
-                        )}
-                        {lib.req_link3 && (
-                          <Badge variant="secondary" className="bg-emerald-50 text-emerald-800 border-emerald-200 text-[10px]">
-                            3. Tin bài hoạt động
-                          </Badge>
-                        )}
-                        {lib.responsible_unit && (
-                          <span className="text-[11px] text-muted-foreground ml-auto">
-                            Đơn vị phụ trách: <b>{lib.responsible_unit}</b>
-                          </span>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
             </div>
           ) : (
             <div className="p-16 text-center text-sm text-muted-foreground bg-white rounded-lg border">
               <Layers className="h-10 w-10 text-slate-200 mx-auto mb-3" />
-              Chưa có tiêu chí nào trong hệ thống. Quản trị viên chưa tạo tiêu chí gốc hoặc đợt đánh giá.
+              Chưa có tiêu chí nào trong đợt đánh giá này.
             </div>
           )
         ) : (
@@ -638,10 +839,7 @@ export default function UserCriteriaPage() {
         )}
       </div>
 
-      {/* ============================================================ */}
-      {/* 8.6 & 9 STICKY BOTTOM ACTION BAR */}
-      {/* Matches user screenshot: Tiến độ: X/Y tiêu chí, Lưu toàn bộ, Nộp bài thi chính thức */}
-      {/* ============================================================ */}
+      {/* Sticky Bottom Action Bar */}
       <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur border-t border-slate-200 px-4 md:px-8 py-3 shadow-lg">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex flex-col text-left w-full sm:w-auto">

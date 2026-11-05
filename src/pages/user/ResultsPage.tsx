@@ -34,17 +34,26 @@ export default function UserResultsPage() {
     },
   });
 
-  // 2. Fetch criteria for period
+  // 2. Fetch criteria for period (excluding locked or deleted)
   const { data: criteria, isLoading: criteriaLoading } = useQuery({
     queryKey: ["user_results_criteria", period?.id],
     queryFn: async () => {
       if (!period) return [];
-      const { data } = await supabase
-        .from("period_criteria")
-        .select("*")
-        .eq("period_id", period.id)
-        .order("sort_order", { ascending: true });
-      return (data ?? []) as PeriodCriterion[];
+      const [critRes, libRes] = await Promise.all([
+        supabase
+          .from("period_criteria")
+          .select("*")
+          .eq("period_id", period.id)
+          .order("sort_order", { ascending: true }),
+        supabase
+          .from("criteria_library")
+          .select("id, is_active"),
+      ]);
+      const libMap = new Map((libRes.data ?? []).map((l) => [l.id, l.is_active]));
+      return (critRes.data ?? []).filter((c) => {
+        if (!c.source_criteria_id) return true;
+        return libMap.get(c.source_criteria_id) === true;
+      }) as PeriodCriterion[];
     },
     enabled: !!period?.id,
   });
