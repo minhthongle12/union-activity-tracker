@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ShieldCheck, Loader2, Eye, EyeOff } from "lucide-react";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
@@ -35,7 +35,6 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(username, password);
-      // Auth state change will trigger redirect via the check above
     } catch (err) {
       setError(err instanceof Error ? err.message : "Đã xảy ra lỗi. Vui lòng thử lại.");
     } finally {
@@ -44,41 +43,43 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-[#f4f9f5] to-lime-50/60 px-4 relative overflow-hidden">
+    <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-gradient-to-br from-emerald-50 via-[#f4faf5] to-lime-50/60 px-4 py-6 sm:py-10 relative overflow-hidden text-slate-900">
       {/* Decorative background glow */}
-      <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-emerald-200/40 blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-lime-200/40 blur-3xl pointer-events-none" />
+      <div className="absolute -top-32 -left-32 w-80 sm:w-96 h-80 sm:h-96 rounded-full bg-emerald-200/40 blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-32 -right-32 w-80 sm:w-96 h-80 sm:h-96 rounded-full bg-lime-200/40 blur-3xl pointer-events-none" />
 
-      <div className="w-full max-w-md relative z-10">
-        {/* Logo / Brand */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center h-22 w-22 rounded-2xl bg-white shadow-xl shadow-emerald-900/10 p-2 mb-4 border border-emerald-100 ring-4 ring-emerald-50">
+      <div className="w-full max-w-sm sm:max-w-md relative z-10">
+        {/* Logo / Brand - Nhỏ gọn, cân đối, responsive mượt mà */}
+        <div className="text-center mb-5 sm:mb-7">
+          <div className="inline-flex items-center justify-center h-16 w-16 sm:h-20 sm:w-20 rounded-2xl bg-white shadow-md shadow-emerald-950/10 p-2 sm:p-2.5 mb-3 border border-emerald-200 ring-4 ring-emerald-100/60">
             <img
               src="/huy-hieu-doi.png"
               alt="Huy hiệu Đội TNTP Hồ Chí Minh"
-              className="h-full w-full object-contain"
+              className="h-full w-full object-contain max-h-12 max-w-12 sm:max-h-16 sm:max-w-16"
             />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight">
             Hệ thống Quản lý Công tác Đội
           </h1>
-          <p className="text-sm text-slate-600 mt-1">
+          <p className="text-xs sm:text-sm text-slate-600 font-medium mt-1">
             Quản lý tiêu chí & minh chứng đánh giá
           </p>
         </div>
 
         {/* Login Card */}
-        <Card className="shadow-xl shadow-emerald-950/5 border-emerald-100/90 rounded-2xl bg-white/95 backdrop-blur-sm">
-          <CardHeader className="space-y-1 pb-4">
-            <CardTitle className="text-xl text-slate-900">Đăng nhập</CardTitle>
-            <CardDescription className="text-slate-500">
+        <Card className="shadow-xl shadow-emerald-950/5 border-emerald-200/80 rounded-2xl bg-white/95 backdrop-blur-sm">
+          <CardHeader className="space-y-1 pb-3 sm:pb-4 px-4 sm:px-6 pt-5 sm:pt-6">
+            <CardTitle className="text-lg sm:text-xl font-bold text-slate-950">Đăng nhập</CardTitle>
+            <CardDescription className="text-xs sm:text-sm text-slate-600">
               Nhập thông tin tài khoản để truy cập hệ thống
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 sm:px-6 pb-6">
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="username" className="text-slate-700">Tên đăng nhập</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="username" className="text-xs sm:text-sm font-bold text-slate-900">
+                  Tên đăng nhập
+                </Label>
                 <Input
                   id="username"
                   type="text"
@@ -88,12 +89,14 @@ export default function LoginPage() {
                   autoComplete="username"
                   autoFocus
                   disabled={loading}
-                  className="rounded-xl border-emerald-100 focus-visible:ring-emerald-500"
+                  className="rounded-xl border-emerald-200 focus-visible:ring-emerald-600 text-xs sm:text-sm h-10 font-medium text-slate-950"
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-slate-700">Mật khẩu</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="password" className="text-xs sm:text-sm font-bold text-slate-900">
+                  Mật khẩu
+                </Label>
                 <div className="relative">
                   <Input
                     id="password"
@@ -103,11 +106,11 @@ export default function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     autoComplete="current-password"
                     disabled={loading}
-                    className="pr-10 rounded-xl border-emerald-100 focus-visible:ring-emerald-500"
+                    className="pr-10 rounded-xl border-emerald-200 focus-visible:ring-emerald-600 text-xs sm:text-sm h-10 font-medium text-slate-950"
                   />
                   <button
                     type="button"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
                     onClick={() => setShowPassword(!showPassword)}
                     tabIndex={-1}
                   >
@@ -117,14 +120,14 @@ export default function LoginPage() {
               </div>
 
               {error && (
-                <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                <div className="rounded-xl bg-red-50 border border-red-200 px-3.5 py-2.5 text-xs text-red-700 font-medium">
                   {error}
                 </div>
               )}
 
               <Button
                 type="submit"
-                className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-md shadow-emerald-700/20 transition-all"
+                className="w-full h-10 sm:h-11 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold shadow-md shadow-emerald-900/20 transition-all text-xs sm:text-sm"
                 disabled={loading}
               >
                 {loading ? (
@@ -140,7 +143,7 @@ export default function LoginPage() {
           </CardContent>
         </Card>
 
-        <p className="text-center text-xs text-slate-400 mt-6">
+        <p className="text-center text-xs text-slate-500 font-medium mt-5">
           © 2026 Hệ thống Quản lý Công tác Đội
         </p>
       </div>
