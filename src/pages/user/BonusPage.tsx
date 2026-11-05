@@ -5,6 +5,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { useGlobalLoading } from "@/contexts/LoadingContext";
 import { triggerPushNotification } from "@/lib/push";
 import type { BonusRequest, BonusStatus, EvaluationPeriod } from "@/types/database";
+import {
+  BonusCriterion,
+  getBonusCriteriaList,
+  DEFAULT_BONUS_CRITERIA,
+} from "@/lib/bonusCriteria";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,6 +46,8 @@ import {
   Calendar,
   ExternalLink,
   Filter,
+  Sparkles,
+  Info,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -63,7 +70,6 @@ async function fetchUserAssignedPeriods(orgId?: string | null): Promise<UserAssi
   if (!orgId) return [];
 
   try {
-    // 1. Fetch organization_periods for this organization (ordered by assigned_at, NOT created_at)
     const { data: opData, error: opError } = await supabase
       .from("organization_periods")
       .select("id, period_id, status, assigned_at")
@@ -75,7 +81,6 @@ async function fetchUserAssignedPeriods(orgId?: string | null): Promise<UserAssi
       throw opError;
     }
 
-    // 2. Fetch all non-draft evaluation periods
     const { data: periodsData, error: periodsError } = await supabase
       .from("evaluation_periods")
       .select("*")
@@ -93,7 +98,6 @@ async function fetchUserAssignedPeriods(orgId?: string | null): Promise<UserAssi
     const result: UserAssignedPeriod[] = [];
     const processedPeriodIds = new Set<string>();
 
-    // Priority 1: Periods explicitly assigned to this organization
     for (const op of opData ?? []) {
       const period = periodMap.get(op.period_id);
       if (period) {
@@ -107,7 +111,6 @@ async function fetchUserAssignedPeriods(orgId?: string | null): Promise<UserAssi
       }
     }
 
-    // Priority 2: Any open/active evaluation periods not yet assigned (provisionable on the fly)
     for (const period of allPeriods) {
       if (!processedPeriodIds.has(period.id) && period.status === "active") {
         result.push({
@@ -130,7 +133,6 @@ async function fetchUserAssignedPeriods(orgId?: string | null): Promise<UserAssi
 async function fetchUserBonusRequests(orgId?: string | null): Promise<UserBonusWithPeriod[]> {
   if (!orgId) return [];
   try {
-    // Get all bonus requests for this org
     const { data: orgPeriods } = await supabase
       .from("organization_periods")
       .select("id")
@@ -181,11 +183,23 @@ export default function UserBonusPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [filterPeriod, setFilterPeriod] = useState<string>("all");
 
+  // Fetch bonus criteria catalog
+  const { data: bonusCriteriaList } = useQuery({
+    queryKey: ["bonus_criteria_catalog"],
+    queryFn: getBonusCriteriaList,
+  });
+
+  const criteriaList = bonusCriteriaList || DEFAULT_BONUS_CRITERIA;
+
   const [form, setForm] = useState({
     organization_period_id: "",
+    bonus_code: "DAT_GIAI",
     title: "",
-    description: "",
+    quantity: 1,
+    base_points: 1.0,
     requested_score: 1.0,
+    unit: "học sinh / giải thưởng",
+    description: "",
     evidenceName: "",
     evidenceUrl: "",
   });
@@ -202,7 +216,46 @@ export default function UserBonusPage() {
     enabled: !!profile?.organization_id,
   });
 
-  // Auto select default active period when dialog opens or assignedPeriods finish loading
+  // Selected bonus criterion definition
+  const selectedCriterion = useMemo(() => {
+    return criteriaList.find((c) => c.code === form.bonus_code) || null;
+  }, [criteriaList, form.bonus_code]);
+
+  // Handle changing bonus code
+  const handleBonusCodeChange = (code: string) => {
+    const crit = criteriaList.find((c) => c.code === code);
+    if (crit) {
+      const qty = form.quantity || 1;
+      const score = qty * crit.base_points;
+      setForm((prev) => ({
+        ...prev,
+        bonus_code: crit.code,
+        title: `[${crit.code}] ${crit.name}`,
+        base_points: crit.base_points,
+        unit: crit.unit,
+        requested_score: score,
+      }));
+    } else {
+      setForm((prev) => ({
+        ...prev,
+        bonus_code: code,
+        base_points: 1.0,
+      }));
+    }
+  };
+
+  // Handle changing quantity
+  const handleQuantityChange = (qty: number) => {
+    const validQty = Math.max(1, qty);
+    const score = Number((validQty * form.base_points).toFixed(2));
+    setForm((prev) => ({
+      ...prev,
+      quantity: validQty,
+      requested_score: score,
+    }));
+  };
+
+  // Auto select default active period when dialog opens
   useEffect(() => {
     if (dialogOpen && !form.organization_period_id && assignedPeriods && assignedPeriods.length > 0) {
       const defaultOp =
@@ -219,11 +272,17 @@ export default function UserBonusPage() {
       assignedPeriods?.find((op) => op.period?.status === "active") ||
       assignedPeriods?.[0];
 
+    const defaultCrit = criteriaList.find((c) => c.code === "DAT_GIAI") || criteriaList[0] || DEFAULT_BONUS_CRITERIA[1];
+
     setForm({
       organization_period_id: defaultOp?.id || "",
-      title: "",
+      bonus_code: defaultCrit.code,
+      title: `[${defaultCrit.code}] ${defaultCrit.name}`,
+      quantity: 1,
+      base_points: defaultCrit.base_points,
+      requested_score: defaultCrit.base_points,
+      unit: defaultCrit.unit,
       description: "",
-      requested_score: 1.0,
       evidenceName: "",
       evidenceUrl: "",
     });
@@ -236,12 +295,11 @@ export default function UserBonusPage() {
         throw new Error("Vui lòng chọn đợt đánh giá áp dụng đề xuất điểm cộng.");
       }
       if (!form.title.trim()) {
-        throw new Error("Vui lòng nhập tên hoạt động / công trình thanh niên.");
+        throw new Error("Vui lòng nhập tên nội dung điểm thưởng.");
       }
 
       let targetOpId = form.organization_period_id;
 
-      // Handle resolving or auto-creating organization_period if needed
       if (targetOpId.startsWith("period_")) {
         const periodId = targetOpId.replace("period_", "");
         if (profile?.organization_id) {
@@ -255,249 +313,312 @@ export default function UserBonusPage() {
           if (existingOp) {
             targetOpId = existingOp.id;
           } else {
-            const { data: newOp, error: createOpErr } = await supabase
+            const { data: newOp, error: createOpError } = await supabase
               .from("organization_periods")
               .insert({
                 period_id: periodId,
                 organization_id: profile.organization_id,
-                status: "in_progress",
+                status: "assigned",
               })
               .select("id")
               .single();
 
-            if (createOpErr) throw createOpErr;
+            if (createOpError) throw createOpError;
             targetOpId = newOp.id;
           }
         }
       }
 
-      const { data: newReq, error: reqError } = await supabase
+      // Format description with structured details
+      const fullDescription = [
+        `Mã tiêu chí thưởng: [${form.bonus_code}]`,
+        `Số lượng áp dụng: ${form.quantity} ${form.unit}`,
+        `Điểm cơ sở: ${form.base_points}đ/${form.unit}`,
+        `Tổng điểm đề xuất: ${form.requested_score}đ`,
+        form.description ? `\nChi tiết thành tích / mô hình:\n${form.description}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      // 1. Insert bonus request
+      const { data: bonusData, error: bonusError } = await supabase
         .from("bonus_requests")
         .insert({
           organization_period_id: targetOpId,
           title: form.title.trim(),
-          description: form.description.trim() || null,
-          requested_score: Number(form.requested_score) || 0,
+          description: fullDescription,
+          requested_score: form.requested_score,
           status,
           submitted_at: status === "submitted" ? new Date().toISOString() : null,
         })
         .select()
         .single();
 
-      if (reqError) throw reqError;
+      if (bonusError) throw bonusError;
 
-      // Add link evidence if provided
-      if (form.evidenceUrl.trim() && newReq) {
-        await supabase.from("bonus_evidence_items").insert({
-          bonus_request_id: newReq.id,
-          file_name: form.evidenceName.trim() || form.evidenceUrl.trim(),
+      // 2. Insert evidence if provided
+      if (form.evidenceUrl.trim() && bonusData) {
+        const { error: evError } = await supabase.from("bonus_evidence_items").insert({
+          bonus_request_id: bonusData.id,
+          file_name: form.evidenceName.trim() || form.title.trim() || "Minh chứng đính kèm",
           external_url: form.evidenceUrl.trim(),
           uploaded_by: profile?.id || null,
         });
+        if (evError) console.error("Error inserting bonus evidence:", evError);
       }
 
-      // Notify Admins
+      // 3. Notify admins if submitted
       if (status === "submitted") {
-        const { data: adminUsers } = await supabase
-          .from("profiles")
-          .select("id")
-          .eq("role", "admin");
+        try {
+          const { data: admins } = await supabase
+            .from("profiles")
+            .select("id")
+            .eq("role", "admin");
 
-        if (adminUsers && adminUsers.length > 0) {
-          const adminIds = adminUsers.map((a) => a.id);
-          await supabase.from("notifications").insert(
-            adminUsers.map((a) => ({
+          if (admins && admins.length > 0) {
+            const notifs = admins.map((a) => ({
               recipient_id: a.id,
-              title: "Đề xuất điểm cộng mới",
-              message: `${profile?.display_name || "Đơn vị"} vừa gửi đề xuất điểm cộng: "${form.title.trim()}". Yêu cầu: +${form.requested_score}đ.`,
-              type: "bonus_submitted",
-              link_url: "/admin/bonus",
-            }))
-          );
+              title: "Đề xuất điểm thưởng mới",
+              message: `Liên đội ${profile?.display_name || "đơn vị"} vừa gửi đề xuất điểm thưởng: "${form.title}" (${form.requested_score} điểm).`,
+              type: "bonus",
+              link: "/admin/bonus",
+            }));
+            await supabase.from("notifications").insert(notifs);
 
-          // Web Push Notification to Admins
-          await triggerPushNotification({
-            userIds: adminIds,
-            title: "Đề xuất điểm cộng mới",
-            body: `${profile?.display_name || "Đơn vị"} vừa gửi đề xuất điểm cộng: "${form.title.trim()}". Yêu cầu: +${form.requested_score}đ.`,
-            url: "/admin/bonus",
-            tag: "bonus-proposal-submitted",
-          });
+            triggerPushNotification({
+              recipientUserIds: admins.map((a) => a.id),
+              title: "Đề xuất điểm thưởng mới",
+              message: `Liên đội ${profile?.display_name || "đơn vị"} vừa đề xuất: "${form.title}" (+${form.requested_score}đ).`,
+              url: "/admin/bonus",
+            });
+          }
+        } catch (e) {
+          console.warn("Could not send admin notification:", e);
         }
       }
+
+      return bonusData;
     },
     onSuccess: (_, status) => {
       queryClient.invalidateQueries({ queryKey: ["user_bonus_requests"] });
-      toast.success(status === "submitted" ? "Đã nộp đề xuất điểm cộng thành công!" : "Đã lưu bản nháp.");
+      queryClient.invalidateQueries({ queryKey: ["user_results_bonus"] });
+      toast.success(
+        status === "submitted"
+          ? "Đã gửi đề xuất điểm thưởng lên Hội đồng Đội!"
+          : "Đã lưu bản nháp đề xuất điểm thưởng!"
+      );
       setDialogOpen(false);
-      setForm({
-        organization_period_id: "",
-        title: "",
-        description: "",
-        requested_score: 1.0,
-        evidenceName: "",
-        evidenceUrl: "",
-      });
     },
-    onError: (err: Error) => toast.error("Lỗi: " + err.message),
+    onError: (err: any) => {
+      toast.error(err.message || "Lỗi khi lưu đề xuất điểm thưởng.");
+    },
   });
 
-  const getStatusBadge = (status: BonusStatus) => {
-    switch (status) {
-      case "draft":
-        return <Badge variant="outline" className="bg-slate-50 text-slate-600">Bản nháp</Badge>;
-      case "submitted":
-        return <Badge className="bg-emerald-600 text-white gap-1"><Clock className="h-3 w-3" /> Đã gửi chờ duyệt</Badge>;
-      case "approved":
-        return <Badge className="bg-teal-600 text-white gap-1"><CheckCircle2 className="h-3 w-3" /> Đã cộng điểm</Badge>;
-      case "rejected":
-        return <Badge className="bg-red-600 text-white gap-1"><XCircle className="h-3 w-3" /> Không duyệt</Badge>;
-      case "revision_requested":
-        return <Badge className="bg-amber-600 text-white gap-1"><AlertCircle className="h-3 w-3" /> Cần bổ sung</Badge>;
-    }
+  const handleSubmit = (status: BonusStatus) => {
+    withLoading(async () => {
+      await createBonusMutation.mutateAsync(status);
+    });
   };
 
-  const filteredBonusRequests = useMemo(() => {
+  const filteredRequests = useMemo(() => {
     if (!bonusRequests) return [];
-    return bonusRequests.filter((item) => {
-      if (filterPeriod !== "all" && item.organization_period?.period?.id !== filterPeriod) {
-        return false;
-      }
-      return true;
-    });
+    if (filterPeriod === "all") return bonusRequests;
+    return bonusRequests.filter(
+      (b) => b.organization_period?.period?.id === filterPeriod
+    );
   }, [bonusRequests, filterPeriod]);
 
-  const totalApprovedScore = (filteredBonusRequests ?? [])
-    .filter((b) => b.status === "approved")
-    .reduce((acc, curr) => acc + (curr.approved_score || 0), 0);
+  const totalApprovedScore = useMemo(() => {
+    return (filteredRequests ?? [])
+      .filter((b) => b.status === "approved")
+      .reduce((acc, b) => acc + (b.approved_score || 0), 0);
+  }, [filteredRequests]);
+
+  const totalPendingScore = useMemo(() => {
+    return (filteredRequests ?? [])
+      .filter((b) => b.status === "submitted")
+      .reduce((acc, b) => acc + (b.requested_score || 0), 0);
+  }, [filteredRequests]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-slate-900">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-emerald-100">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Quản lý điểm cộng</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Đề xuất điểm thưởng cho các thành tích nổi bật, công trình, phần việc sáng tạo của đơn vị
+          <h1 className="text-2xl font-extrabold tracking-tight text-slate-950">
+            Đề xuất Điểm thưởng Thi đua
+          </h1>
+          <p className="text-sm text-slate-700 mt-1 flex items-center gap-2">
+            <Award className="h-4 w-4 text-emerald-700" />
+            Đăng ký cộng điểm các thành tích, mô hình sáng tạo và giải thưởng phong trào Đội
           </p>
         </div>
-        <Button onClick={handleOpenCreateDialog} className="gap-2 shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-md shadow-emerald-700/20">
+
+        <Button
+          onClick={handleOpenCreateDialog}
+          className="gap-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold shrink-0 shadow-md shadow-emerald-900/20 rounded-xl"
+        >
           <Plus className="h-4 w-4" />
-          Đề xuất điểm cộng
+          Tạo đề xuất điểm thưởng
         </Button>
       </div>
 
-      {/* Overview Card */}
+      {/* Summary Score Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="border-slate-200/80 rounded-2xl">
-          <CardContent className="pt-6">
-            <span className="text-xs text-muted-foreground block">Tổng yêu cầu đã đề xuất</span>
-            <span className="text-2xl font-bold text-slate-900 mt-1 block">
-              {filteredBonusRequests?.length || 0}
-            </span>
+        <Card className="border border-emerald-200 bg-gradient-to-br from-emerald-50/80 via-white to-lime-50/50 shadow-2xs rounded-2xl">
+          <CardContent className="pt-5 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-800">
+                <CheckCircle2 className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-2xl font-black text-slate-950">
+                  +{totalApprovedScore.toFixed(2)}đ
+                </p>
+                <p className="text-xs text-slate-700 font-bold">Điểm thưởng đã duyệt</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="border-emerald-200/80 bg-emerald-50/50 rounded-2xl">
-          <CardContent className="pt-6">
-            <span className="text-xs text-emerald-800 block font-semibold">Điểm cộng đã được phê duyệt</span>
-            <span className="text-2xl font-bold text-emerald-700 mt-1 block">
-              +{totalApprovedScore} điểm
-            </span>
+        <Card className="border border-amber-200 bg-gradient-to-br from-amber-50/80 via-white to-orange-50/50 shadow-2xs rounded-2xl">
+          <CardContent className="pt-5 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-800">
+                <Clock className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-2xl font-black text-slate-950">
+                  +{totalPendingScore.toFixed(2)}đ
+                </p>
+                <p className="text-xs text-slate-700 font-bold">Điểm đang chờ duyệt</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="border-lime-200/80 bg-lime-50/40 rounded-2xl">
-          <CardContent className="pt-6">
-            <span className="text-xs text-lime-900 block font-semibold">Đang chờ xét duyệt</span>
-            <span className="text-2xl font-bold text-emerald-700 mt-1 block">
-              {(filteredBonusRequests ?? []).filter((b) => b.status === "submitted").length}
-            </span>
+        <Card className="border border-slate-200 bg-white shadow-2xs rounded-2xl">
+          <CardContent className="pt-5 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700">
+                <FileText className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-2xl font-black text-slate-950">
+                  {filteredRequests.length}
+                </p>
+                <p className="text-xs text-slate-700 font-bold">Tổng số hồ sơ đề xuất</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Requests List */}
-      <Card className="border-slate-200/80 shadow-2xs rounded-2xl">
-        <CardHeader className="p-4 sm:p-5 pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Award className="h-4 w-4 text-emerald-600" />
-            Danh sách đề xuất điểm cộng
+      {/* Filter by Period */}
+      <div className="flex items-center justify-between gap-4 flex-wrap bg-white p-3 rounded-2xl border border-emerald-100 shadow-2xs">
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-emerald-700" />
+          <span className="text-xs font-bold text-slate-950">Lọc theo đợt:</span>
+          <Select value={filterPeriod} onValueChange={setFilterPeriod}>
+            <SelectTrigger className="w-[200px] sm:w-[240px] text-xs h-9 bg-emerald-50/40 border-emerald-200 rounded-xl font-bold text-slate-950">
+              <SelectValue placeholder="Tất cả đợt đánh giá" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl">
+              <SelectItem value="all" className="text-xs font-medium">Tất cả đợt đánh giá</SelectItem>
+              {(assignedPeriods ?? []).map((op) => (
+                <SelectItem key={op.period.id} value={op.period.id} className="text-xs">
+                  {op.period.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Bonus Requests List */}
+      <Card className="border-emerald-200 shadow-2xs rounded-2xl overflow-hidden">
+        <CardHeader className="pb-3 border-b border-emerald-50 bg-white">
+          <CardTitle className="text-base font-bold text-slate-950 flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-emerald-700" />
+            Danh sách hồ sơ đề xuất điểm thưởng
           </CardTitle>
-          <div className="w-full sm:w-auto flex items-center gap-2">
-            <Select value={filterPeriod} onValueChange={setFilterPeriod}>
-              <SelectTrigger className="w-full sm:w-[220px] text-xs h-9">
-                <SelectValue placeholder="Lọc theo đợt đánh giá" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả đợt đánh giá</SelectItem>
-                {(assignedPeriods ?? []).map((op) => (
-                  <SelectItem key={op.period.id} value={op.period.id}>
-                    {op.period.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="p-12 text-center text-sm text-muted-foreground space-y-2">
-              <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-600" />
-              <p>Đang tải dữ liệu điểm cộng...</p>
+            <div className="p-12 text-center text-sm text-slate-600 space-y-2">
+              <Loader2 className="h-6 w-6 animate-spin mx-auto text-emerald-700" />
+              <p>Đang tải danh sách điểm thưởng...</p>
             </div>
-          ) : (filteredBonusRequests ?? []).length === 0 ? (
-            <div className="p-12 sm:p-16 text-center text-sm text-muted-foreground">
-              <Award className="h-10 w-10 text-slate-200 mx-auto mb-3" />
-              {filterPeriod !== "all"
-                ? "Chưa có đề xuất điểm cộng nào trong đợt đánh giá này."
-                : "Chưa có đề xuất điểm cộng nào. Nhấn \"Đề xuất điểm cộng\" để tạo mới."}
+          ) : filteredRequests.length === 0 ? (
+            <div className="p-12 text-center text-sm text-slate-600">
+              Chưa có hồ sơ đề xuất điểm thưởng nào trong đợt này.
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
-              {filteredBonusRequests?.map((item) => (
-                <div key={item.id} className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
-                  <div className="space-y-1.5 max-w-2xl min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                      <h4 className="font-semibold text-slate-900 text-sm sm:text-base break-words">{item.title}</h4>
-                      {getStatusBadge(item.status)}
-                      {item.organization_period?.period?.name && (
-                        <Badge variant="outline" className="text-xs gap-1 bg-emerald-50 text-emerald-800 border-emerald-200 max-w-full truncate">
-                          <Calendar className="h-3 w-3 shrink-0" />
-                          <span className="truncate">{item.organization_period.period.name}</span>
-                        </Badge>
-                      )}
-                    </div>
-                    {item.description && (
-                      <p className="text-xs text-muted-foreground line-clamp-2">{item.description}</p>
-                    )}
-                    <div className="flex items-center gap-2 sm:gap-4 text-xs text-muted-foreground pt-1 flex-wrap">
-                      <span>Điểm đề xuất: <b className="text-slate-800">{item.requested_score}đ</b></span>
-                      {item.approved_score !== null && (
-                        <span>Điểm duyệt: <b className="text-emerald-700 font-bold">+{item.approved_score}đ</b></span>
-                      )}
-                      <span>Ngày gửi: {item.submitted_at ? new Date(item.submitted_at).toLocaleDateString("vi-VN") : "Bản nháp"}</span>
+              {filteredRequests.map((b) => (
+                <div key={b.id} className="p-4 sm:p-5 hover:bg-emerald-50/30 transition-colors space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-sm font-bold text-slate-950">{b.title}</h3>
+                        {b.status === "approved" ? (
+                          <Badge className="bg-emerald-700 text-white font-bold text-[10px]">
+                            Đã duyệt (+{b.approved_score}đ)
+                          </Badge>
+                        ) : b.status === "submitted" ? (
+                          <Badge className="bg-amber-700 text-white font-bold text-[10px]">
+                            Chờ thẩm định (+{b.requested_score}đ)
+                          </Badge>
+                        ) : b.status === "revision_requested" ? (
+                          <Badge className="bg-orange-700 text-white font-bold text-[10px]">
+                            Cần bổ sung minh chứng
+                          </Badge>
+                        ) : b.status === "rejected" ? (
+                          <Badge className="bg-red-700 text-white font-bold text-[10px]">
+                            Không chấp thuận
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-slate-700 border-slate-300 text-[10px] font-semibold">
+                            Bản nháp
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-600 flex items-center gap-2">
+                        <span>Đợt: <b>{b.organization_period?.period?.name || "Chưa rõ"}</b></span>
+                        <span>•</span>
+                        <span>Ngày gửi: {b.submitted_at ? new Date(b.submitted_at).toLocaleDateString("vi-VN") : "Bản nháp"}</span>
+                      </p>
                     </div>
 
-                    {/* Evidence links */}
-                    {item.evidence && item.evidence.length > 0 && (
-                      <div className="flex items-center gap-1.5 sm:gap-2 pt-1 flex-wrap">
-                        <span className="text-xs text-slate-500">Minh chứng:</span>
-                        {item.evidence.map((ev) => (
-                          <a
-                            key={ev.id}
-                            href={ev.external_url || "#"}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-emerald-700 hover:text-emerald-900 hover:underline flex items-center gap-1 bg-emerald-50/50 px-2 py-0.5 rounded-lg border border-emerald-200/80 max-w-full truncate"
-                          >
-                            <ExternalLink className="h-3 w-3 shrink-0" />
-                            <span className="truncate">{ev.file_name || "Xem liên kết"}</span>
-                          </a>
-                        ))}
-                      </div>
-                    )}
+                    <div className="text-right shrink-0">
+                      <span className="text-xs text-slate-600 font-semibold block">Điểm đề xuất:</span>
+                      <span className="text-lg font-black text-slate-950">+{b.requested_score}đ</span>
+                    </div>
                   </div>
+
+                  {b.description && (
+                    <div className="bg-slate-50 p-3 rounded-xl text-xs text-slate-800 whitespace-pre-line border border-slate-200">
+                      {b.description}
+                    </div>
+                  )}
+
+                  {b.evidence && b.evidence.length > 0 && (
+                    <div className="flex items-center gap-2 flex-wrap pt-1">
+                      <span className="text-xs font-semibold text-slate-700">Minh chứng:</span>
+                      {b.evidence.map((ev) => (
+                        <a
+                          key={ev.id}
+                          href={ev.external_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs font-bold text-emerald-800 hover:text-emerald-950 hover:underline flex items-center gap-1 bg-emerald-100/70 px-2.5 py-1 rounded-lg border border-emerald-300 max-w-full truncate"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{ev.file_name || "Xem liên kết bài viết"}</span>
+                        </a>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -507,34 +628,36 @@ export default function UserBonusPage() {
 
       {/* Dialog Create Bonus Proposal */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="w-[94vw] max-w-lg max-h-[92dvh] flex flex-col p-4 sm:p-6 overflow-hidden rounded-xl">
+        <DialogContent className="w-[94vw] max-w-xl max-h-[92dvh] flex flex-col p-4 sm:p-6 overflow-hidden rounded-2xl border-emerald-200">
           <DialogHeader className="shrink-0 pb-1 text-left">
-            <DialogTitle className="text-lg sm:text-xl font-bold text-slate-900">
-              Đề xuất điểm cộng thi đua
+            <DialogTitle className="text-lg sm:text-xl font-extrabold text-slate-950 flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-emerald-700" />
+              Đề xuất Điểm thưởng Thi đua
             </DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm text-slate-500">
-              Chọn đợt đánh giá, nhập nội dung hoạt động tiêu biểu và nộp kèm minh chứng để Hội đồng xem xét duyệt điểm cộng.
+            <DialogDescription className="text-xs text-slate-600 font-medium">
+              Chọn tiêu chí điểm thưởng, nhập số lượng em học sinh hoặc mô hình đạt giải để hệ thống tự động tính điểm đề xuất.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto space-y-3.5 py-2 pr-1 -mr-1">
+          <div className="flex-1 overflow-y-auto space-y-4 py-2 pr-1 -mr-1 text-slate-900">
+            {/* 1. Chọn đợt đánh giá */}
             <div>
-              <Label className="text-xs font-semibold text-slate-800">
+              <Label className="text-xs font-bold text-slate-950">
                 Thuộc đợt đánh giá <span className="text-red-500">*</span>
               </Label>
               <Select
                 value={form.organization_period_id}
                 onValueChange={(val) => setForm({ ...form, organization_period_id: val })}
               >
-                <SelectTrigger className="mt-1 w-full text-xs sm:text-sm h-9 sm:h-10">
+                <SelectTrigger className="mt-1 w-full text-xs font-bold text-slate-950 h-10 border-emerald-200 rounded-xl">
                   <SelectValue placeholder="-- Chọn đợt đánh giá --" />
                 </SelectTrigger>
-                <SelectContent className="max-w-[90vw]">
+                <SelectContent className="max-w-[90vw] rounded-xl">
                   {(assignedPeriods ?? []).map((op) => (
                     <SelectItem key={op.id} value={op.id} className="py-2">
                       <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 text-left">
-                        <span className="font-medium text-slate-900 line-clamp-1">{op.period.name}</span>
-                        <span className="text-[11px] text-muted-foreground shrink-0">
+                        <span className="font-bold text-slate-950 line-clamp-1">{op.period.name}</span>
+                        <span className="text-[11px] text-slate-600 shrink-0 font-medium">
                           ({op.period.status === "active" ? "Đang mở" : op.period.status})
                         </span>
                       </div>
@@ -542,114 +665,176 @@ export default function UserBonusPage() {
                   ))}
                 </SelectContent>
               </Select>
-              {(!assignedPeriods || assignedPeriods.length === 0) && (
-                <p className="text-xs text-amber-600 mt-1">
-                  Đơn vị chưa được phân công đợt đánh giá nào. Vui lòng liên hệ Admin.
-                </p>
-              )}
             </div>
 
+            {/* 2. Chọn Mã tiêu chí thưởng do Admin thiết lập */}
             <div>
-              <Label className="text-xs font-semibold text-slate-800">
-                Tên hoạt động / Công trình thanh niên <span className="text-red-500">*</span>
+              <Label className="text-xs font-bold text-slate-950">
+                Tiêu chí điểm thưởng quy định <span className="text-red-500">*</span>
+              </Label>
+              <Select
+                value={form.bonus_code}
+                onValueChange={handleBonusCodeChange}
+              >
+                <SelectTrigger className="mt-1 w-full text-xs font-bold text-slate-950 h-10 border-emerald-300 bg-emerald-50/40 rounded-xl">
+                  <SelectValue placeholder="-- Chọn tiêu chí điểm thưởng --" />
+                </SelectTrigger>
+                <SelectContent className="max-w-[90vw] rounded-xl">
+                  {criteriaList.map((crit) => (
+                    <SelectItem key={crit.code} value={crit.code} className="py-2.5">
+                      <div className="flex flex-col text-left">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[11px] font-black bg-emerald-100 text-emerald-900 px-1.5 py-0.5 rounded">
+                            {crit.code}
+                          </span>
+                          <span className="font-bold text-slate-950 text-xs">
+                            {crit.name}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-emerald-800 font-semibold mt-0.5">
+                          {crit.base_points} điểm / {crit.unit}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="KHAC" className="py-2">
+                    <span className="font-bold text-slate-950">[KHAC] Điểm thưởng thi đua khác</span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Evidence Guidelines Box for chosen criteria */}
+            {selectedCriterion?.evidence_guidelines && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl space-y-1">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900">
+                  <Info className="h-4 w-4 text-emerald-700 shrink-0" />
+                  <span>Hướng dẫn & Yêu cầu minh chứng quy định:</span>
+                </div>
+                <p className="text-[11px] text-slate-800 whitespace-pre-line font-medium pl-5 leading-relaxed">
+                  {selectedCriterion.evidence_guidelines}
+                </p>
+              </div>
+            )}
+
+            {/* 3. Số lượng áp dụng & Tính toán điểm */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+              <div>
+                <Label className="text-xs font-bold text-slate-950 block">
+                  Số lượng ({form.unit}) <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="50"
+                  value={form.quantity}
+                  onChange={(e) => handleQuantityChange(parseInt(e.target.value) || 1)}
+                  className="mt-1 font-black text-slate-950 text-sm h-10 bg-white"
+                />
+                <p className="text-[10px] text-slate-600 mt-1">
+                  Ví dụ: có 4 em học sinh đạt giải, nhập 4.
+                </p>
+              </div>
+
+              <div>
+                <Label className="text-xs font-bold text-slate-950 block">
+                  Tổng điểm đề xuất (tự động tính)
+                </Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <Input
+                    type="number"
+                    step="0.25"
+                    min="0.25"
+                    value={form.requested_score}
+                    onChange={(e) => setForm({ ...form, requested_score: parseFloat(e.target.value) || 0 })}
+                    className="font-black text-emerald-800 text-sm h-10 bg-white border-emerald-300"
+                  />
+                  <span className="text-xs font-black text-slate-950 shrink-0">điểm</span>
+                </div>
+                <p className="text-[10px] text-emerald-800 font-bold mt-1">
+                  = {form.quantity} x {form.base_points}đ/{form.unit}
+                </p>
+              </div>
+            </div>
+
+            {/* 4. Tiêu đề đề xuất */}
+            <div>
+              <Label className="text-xs font-bold text-slate-950">
+                Tiêu đề hồ sơ đề xuất <span className="text-red-500">*</span>
               </Label>
               <Input
-                placeholder="VD: Mô hình sáng kiến số hóa di tích lịch sử địa phương"
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
-                className="mt-1 text-xs sm:text-sm h-9 sm:h-10 w-full"
+                className="mt-1 text-xs font-bold text-slate-950 h-10 border-slate-300"
               />
             </div>
 
+            {/* 5. Danh sách chi tiết học sinh / mô hình / thành tích */}
             <div>
-              <Label className="text-xs font-semibold text-slate-800">Mô tả chi tiết kết quả hoạt động</Label>
+              <Label className="text-xs font-bold text-slate-950">
+                Chi tiết danh sách học sinh / mô hình / thành tích đạt được <span className="text-red-500">*</span>
+              </Label>
               <Textarea
-                placeholder="Mô tả quy mô, kết quả, ý nghĩa xã hội và sự lan tỏa của hoạt động..."
-                rows={3}
+                placeholder={`Nhập chi tiết từng trường hợp, ví dụ:\n- Nguyễn Hà Minh Anh - Giải Nhì Cuộc thi Sáng tạo thanh thiếu niên nhi đồng cấp tỉnh\n- Phùng Công Minh Triết - Giải Nhất Hội thi Tin học trẻ cấp tỉnh\n- Đồng diễn sân trường cùng KUN - Giải Phong cách`}
+                rows={4}
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
-                className="mt-1 text-xs sm:text-sm w-full resize-none"
+                className="mt-1 text-xs text-slate-950 font-medium w-full resize-none border-slate-300"
               />
             </div>
 
-            <div>
-              <Label className="text-xs font-semibold text-slate-800">Điểm đề xuất (tối đa 2.0đ/hoạt động)</Label>
-              <Input
-                type="number"
-                step="0.25"
-                min="0.25"
-                max="5.0"
-                value={form.requested_score}
-                onChange={(e) => setForm({ ...form, requested_score: parseFloat(e.target.value) || 0 })}
-                className="mt-1 w-full sm:w-36 font-bold text-blue-700 text-xs sm:text-sm h-9 sm:h-10"
-              />
-            </div>
-
-            <div className="border border-slate-200 rounded-lg p-3 bg-slate-50 space-y-2">
-              <Label className="text-xs font-semibold text-slate-800 block">
-                Liên kết minh chứng (Báo chí, Fanpage, Drive...)
+            {/* 6. Minh chứng bài viết / link */}
+            <div className="border border-emerald-200 rounded-xl p-3 bg-emerald-50/50 space-y-2">
+              <Label className="text-xs font-bold text-slate-950 block">
+                Liên kết bài viết minh chứng (Facebook, Drive, Báo chí...)
               </Label>
               <Input
-                placeholder="Tiêu đề bài viết minh chứng"
+                placeholder="Tiêu đề bài viết minh chứng (ví dụ: Tin bài trao giải trên Fanpage)"
                 value={form.evidenceName}
                 onChange={(e) => setForm({ ...form, evidenceName: e.target.value })}
-                className="text-xs sm:text-sm bg-white h-9"
+                className="text-xs bg-white h-9 border-slate-300"
               />
               <Input
-                placeholder="https://..."
+                placeholder="https://www.facebook.com/share/p/..."
                 value={form.evidenceUrl}
                 onChange={(e) => setForm({ ...form, evidenceUrl: e.target.value })}
-                className="text-xs sm:text-sm bg-white h-9"
+                className="text-xs bg-white h-9 font-mono border-slate-300"
               />
+              <p className="text-[10px] text-slate-600 font-medium">
+                * Lưu ý: Hình ảnh bài viết minh chứng phải có Logo Hội đồng Đội theo đúng quy định.
+              </p>
             </div>
           </div>
 
           <DialogFooter className="shrink-0 pt-3 border-t border-slate-100 flex flex-col-reverse sm:flex-row gap-2">
             <Button
-              type="button"
               variant="outline"
               onClick={() => setDialogOpen(false)}
-              className="w-full sm:w-auto text-xs sm:text-sm h-9 sm:h-10"
+              className="w-full sm:w-auto text-xs font-bold text-slate-700 h-9 rounded-xl"
             >
               Hủy
             </Button>
             <Button
-              type="button"
               variant="secondary"
-              onClick={() => {
-                if (!form.organization_period_id) {
-                  toast.error("Vui lòng chọn đợt đánh giá áp dụng đề xuất điểm cộng.");
-                  return;
-                }
-                if (!form.title.trim()) {
-                  toast.error("Vui lòng nhập tên hoạt động.");
-                  return;
-                }
-                createBonusMutation.mutate("draft");
-              }}
+              onClick={() => handleSubmit("draft")}
               disabled={createBonusMutation.isPending}
-              className="w-full sm:w-auto text-xs sm:text-sm h-9 sm:h-10"
+              className="w-full sm:w-auto text-xs font-bold h-9 rounded-xl"
             >
-              Lưu nháp
+              Lưu bản nháp
             </Button>
             <Button
-              type="button"
-              className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto text-xs sm:text-sm h-9 sm:h-10 font-semibold rounded-xl shadow-md shadow-emerald-700/20"
-              onClick={() => {
-                if (!form.organization_period_id) {
-                  toast.error("Vui lòng chọn đợt đánh giá áp dụng đề xuất điểm cộng.");
-                  return;
-                }
-                if (!form.title.trim()) {
-                  toast.error("Vui lòng nhập tên hoạt động.");
-                  return;
-                }
-                createBonusMutation.mutate("submitted");
-              }}
+              onClick={() => handleSubmit("submitted")}
               disabled={createBonusMutation.isPending}
+              className="w-full sm:w-auto text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white h-9 rounded-xl"
             >
-              {createBonusMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Gửi đề xuất
+              {createBonusMutation.isPending ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                  Đang gửi...
+                </>
+              ) : (
+                "Gửi đề xuất điểm thưởng"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

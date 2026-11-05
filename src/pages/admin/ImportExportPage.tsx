@@ -1,12 +1,14 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import ExcelJS from "exceljs";
+import { saveBonusCriteriaList, DEFAULT_BONUS_CRITERIA, BonusCriterion } from "@/lib/bonusCriteria";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   FileSpreadsheet,
   Download,
@@ -15,7 +17,9 @@ import {
   AlertTriangle,
   FileCheck,
   Loader2,
-  RefreshCw,
+  Sparkles,
+  Info,
+  Calendar,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
@@ -46,13 +50,192 @@ export default function ImportExportPage() {
   const [activeTab, setActiveTab] = useState<"import" | "export">("import");
   const [parsing, setParsing] = useState(false);
   const [fileName, setFileName] = useState<string>("");
+  const [detectedFormat, setDetectedFormat] = useState<"doi_framework" | "technical" | null>(null);
   const [previewRows, setPreviewRows] = useState<ImportRow[]>([]);
   const [hasErrors, setHasErrors] = useState(false);
+  const [detectedBonusList, setDetectedBonusList] = useState<BonusCriterion[]>([]);
+  const [syncBonus, setSyncBonus] = useState(true);
+  const [applyToActivePeriod, setApplyToActivePeriod] = useState(true);
+
+  // Fetch active evaluation period
+  const { data: activePeriod } = useQuery({
+    queryKey: ["admin_active_period"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("evaluation_periods")
+        .select("*")
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+  });
 
   // ============================================================
-  // Download Template
+  // Download Template: Mẫu Khung Tiêu Chí Công Tác Đội (Thực tế)
   // ============================================================
-  const downloadTemplate = async () => {
+  const downloadDoiFrameworkTemplate = async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Khung_Tieu_Chi_Doi");
+
+    // Title rows
+    sheet.addRow(["ĐỘI TNTP HỒ CHÍ MINH"]);
+    sheet.addRow(["HỘI ĐỒNG ĐỘI XÃ BẾN LỨC"]);
+    sheet.addRow(["KHUNG TIÊU CHÍ ĐÁNH GIÁ, XẾP LOẠI DANH HIỆU 'LIÊN ĐỘI MẠNH'"]);
+    sheet.addRow(["* KHUNG ĐIỂM (100 điểm)"]);
+
+    // Header row
+    const headerRow = sheet.addRow([
+      "TT",
+      "Tiêu chí",
+      "Nội dung thực hiện",
+      "Điểm",
+      "Yêu cầu minh chứng",
+      "Đường link bài viết về hoạt động",
+      "Ghi chú điểm HĐĐ chấm",
+    ]);
+
+    headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    headerRow.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FF15803D" }, // Emerald-700
+    };
+
+    // Sample data rows matching the actual Excel
+    sheet.addRow([
+      1,
+      "1. Thực hiện chỉ tiêu năm học (16đ)",
+      "1.1. Liên đội tổ chức sinh hoạt chuyên đề “Mỗi tuần 01 câu chuyện đẹp; 01 cuốn sách hay; 01 tấm gương sáng”",
+      2,
+      "- Hội đồng Đội cấp xã theo dõi\n- Hình ảnh đường link bài viết phải có Logo Hội đồng Đội minh chứng rõ nội dung, thời gian, địa điểm.",
+      "https://facebook.com/share/...",
+      "",
+    ]);
+    sheet.addRow([
+      2,
+      "",
+      "1.2. Liên đội tổ chức hoạt động, công trình măng non chào mừng kỷ niệm các ngày lễ lớn",
+      4,
+      "- Hình ảnh đường link bài viết có Logo Hội đồng Đội",
+      "",
+      "",
+    ]);
+    sheet.addRow([
+      3,
+      "",
+      "1.3. Liên đội tổ chức cho đội viên, thiếu nhi đến với địa chỉ đỏ.",
+      2,
+      "- Tổ chức tối thiểu cho 20 học sinh/trường, có bài viết và logo HĐĐ.",
+      "",
+      "",
+    ]);
+    sheet.addRow([
+      4,
+      "",
+      "1.4. Liên đội hỗ trợ, giúp đỡ ít nhất 15 thiếu nhi có hoàn cảnh khó khăn.",
+      3,
+      "- Danh sách học sinh được hỗ trợ kèm hình ảnh bài viết",
+      "",
+      "",
+    ]);
+    sheet.addRow([
+      5,
+      "",
+      "1.5. Liên đội triển khai ít nhất 01 mô hình trải nghiệm sáng tạo, trang bị kỹ năng số cho thiếu nhi",
+      5,
+      "- Báo cáo kết quả và hình ảnh bài viết có logo HĐĐ",
+      "",
+      "",
+    ]);
+    sheet.addRow([
+      6,
+      "2. Phong trào “Thiếu nhi Việt Nam thi đua làm theo 5 điều Bác Hồ dạy” (29đ)",
+      "2.1. 100% Liên đội tham gia hoạt động tìm hiểu, viết thư gửi Đại hội Đoàn các cấp.",
+      3,
+      "- Hình ảnh đường link bài viết có Logo Hội đồng Đội",
+      "",
+      "",
+    ]);
+
+    // Bonus section
+    sheet.addRow([]);
+    sheet.addRow(["** ĐIỂM THƯỞNG (5 điểm)"]);
+    sheet.addRow([
+      35,
+      "7. ĐIỂM THƯỞNG",
+      "1. Có mô hình hoặc cách làm mới, sáng tạo hiệu quả trong công tác Đội và phong trào thiếu nhi.",
+      1,
+      "- Báo cáo kết quả mô hình\n- Link bài viết có Logo Hội đồng Đội",
+      "",
+      "",
+    ]);
+    sheet.addRow([
+      36,
+      "",
+      "2. Có sản phẩm đạt giải từ cấp tỉnh trở lên khi tham gia các cuộc thi do Hội đồng Đội cấp trên phát động.",
+      1,
+      "- Hội đồng Đội xã theo dõi (1đ cho mỗi em/sản phẩm đạt giải)",
+      "",
+      "",
+    ]);
+    sheet.addRow([
+      37,
+      "",
+      "3. Có giáo viên hoặc học sinh được Hội đồng Đội tỉnh chọn cử tham gia hoạt động cấp Trung ương.",
+      1,
+      "- Quyết định / công văn chọn cử của HĐĐ tỉnh",
+      "",
+      "",
+    ]);
+    sheet.addRow([
+      38,
+      "",
+      "4. Đăng cai, hỗ trợ tổ chức các hoạt động của Hội đồng Đội xã.",
+      1,
+      "- Kế hoạch phối hợp hoặc xác nhận của HĐĐ xã",
+      "",
+      "",
+    ]);
+    sheet.addRow([
+      39,
+      "",
+      "5. Phối hợp Hội đồng Đội xã xây dựng mô hình không gian đọc sách tương tác và sinh hoạt Đội",
+      1,
+      "- Hình ảnh hoặc bài viết truyền thông",
+      "",
+      "",
+    ]);
+
+    // Set column widths
+    sheet.columns = [
+      { width: 8 },
+      { width: 35 },
+      { width: 45 },
+      { width: 10 },
+      { width: 40 },
+      { width: 35 },
+      { width: 25 },
+    ];
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "Mau_Khung_Tieu_Chi_Cong_Tac_Doi.xlsx";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Đã tải xuống Mẫu Khung Tiêu Chí Công tác Đội!");
+  };
+
+  // ============================================================
+  // Download Template: Mẫu Kỹ Thuật Chi Tiết
+  // ============================================================
+  const downloadTechnicalTemplate = async () => {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Bo_Tieu_Chi_Chuan");
 
@@ -72,45 +255,27 @@ export default function ImportExportPage() {
       { header: "Display_Order", key: "Display_Order", width: 14 },
     ];
 
-    // Sample data rows
     sheet.addRow({
       Category_Code: "CAT01",
-      Category_Name: "Công tác Tuyên giáo",
+      Category_Name: "Thực hiện chỉ tiêu năm học",
       Criterion_Code: "1.1",
-      Criterion_Title: "Học tập và làm theo tư tưởng đạo đức Hồ Chí Minh",
-      Description: "Tổ chức ít nhất 02 chuyên đề trong năm",
-      Scoring_Guidelines: "Mỗi chuyên đề đạt yêu cầu được 2.5 điểm",
-      Max_Score: 5.0,
+      Criterion_Title: "Sinh hoạt chuyên đề Mỗi tuần 01 câu chuyện đẹp",
+      Description: "Tổ chức sinh hoạt chuyên đề theo quy định",
+      Scoring_Guidelines: "Có hình ảnh và logo Hội đồng Đội",
+      Max_Score: 2.0,
       Requires_Doc1: "TRUE",
       Requires_Doc2: "TRUE",
       Requires_Link3: "TRUE",
-      Responsible_Unit: "Ban Tuyên giáo",
-      Deadline: "2026-11-30",
+      Responsible_Unit: "Liên đội",
+      Deadline: "2026-05-15",
       Display_Order: 1,
     });
 
-    sheet.addRow({
-      Category_Code: "CAT02",
-      Category_Name: "Phong trào Tình nguyện",
-      Criterion_Code: "2.1",
-      Criterion_Title: "Liên đội đồng loạt tổ chức Ngày hội Thiếu nhi vui khỏe - Tiến bước lên Đoàn",
-      Description: "Tham gia các đợt ra quân và phong trào Đội",
-      Scoring_Guidelines: "1 điểm / mỗi đợt có báo cáo và hình ảnh",
-      Max_Score: 4.0,
-      Requires_Doc1: "TRUE",
-      Requires_Doc2: "TRUE",
-      Requires_Link3: "FALSE",
-      Responsible_Unit: "Ban Phong trào",
-      Deadline: "2026-12-15",
-      Display_Order: 2,
-    });
-
-    // Style headers
     sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
     sheet.getRow(1).fill = {
       type: "pattern",
       pattern: "solid",
-      fgColor: { argb: "FF1E3A5F" },
+      fgColor: { argb: "FF15803D" },
     };
 
     const buffer = await workbook.xlsx.writeBuffer();
@@ -120,14 +285,14 @@ export default function ImportExportPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "Mau_Nhap_Tieu_Chi_Doan.xlsx";
+    a.download = "Mau_Ky_Thuat_Tieu_Chi.xlsx";
     a.click();
     URL.revokeObjectURL(url);
-    toast.success("Đã tải xuống file Excel mẫu!");
+    toast.success("Đã tải xuống file Excel mẫu kỹ thuật!");
   };
 
   // ============================================================
-  // Parse Uploaded Excel File
+  // Parse Uploaded Excel File (Hỗ trợ cả 2 định dạng)
   // ============================================================
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -136,109 +301,315 @@ export default function ImportExportPage() {
     setParsing(true);
     setFileName(file.name);
     setPreviewRows([]);
+    setDetectedBonusList([]);
+    setDetectedFormat(null);
 
     try {
       const workbook = new ExcelJS.Workbook();
       const arrayBuffer = await file.arrayBuffer();
       await workbook.xlsx.load(arrayBuffer);
 
-      const worksheet = workbook.worksheets[0];
+      // Search all worksheets or pick the first with data
+      let worksheet = workbook.worksheets[0];
+      for (const ws of workbook.worksheets) {
+        if (ws.rowCount > 5) {
+          worksheet = ws;
+          break;
+        }
+      }
+
       if (!worksheet) {
-        throw new Error("File Excel không có trang tính nào.");
+        throw new Error("File Excel không có trang tính nào chứa dữ liệu.");
       }
 
-      // Check headers on row 1
-      const headerRow = worksheet.getRow(1);
-      const headers: string[] = [];
-      headerRow.eachCell((cell) => {
-        headers.push(String(cell.value || "").trim());
-      });
+      // Detect format by scanning first 12 rows
+      let headerRowIndex = -1;
+      let isDoiFramework = false;
+      let colTT = -1;
+      let colCategory = -1;
+      let colTitle = -1;
+      let colScore = -1;
+      let colEvidence = -1;
 
-      const requiredHeaders = ["Criterion_Code", "Criterion_Title", "Max_Score"];
-      const missing = requiredHeaders.filter((rh) => !headers.includes(rh));
-      if (missing.length > 0) {
-        throw new Error(`File thiếu các cột bắt buộc: ${missing.join(", ")}`);
+      for (let r = 1; r <= Math.min(15, worksheet.rowCount); r++) {
+        const row = worksheet.getRow(r);
+        let hasTitle = false;
+        let hasScore = false;
+        let hasCategoryOrTT = false;
+
+        row.eachCell((cell, colNumber) => {
+          const val = String(cell.value || "").trim().toLowerCase();
+          if (val === "criterion_code" || val === "criterion_title") {
+            // Technical format
+            headerRowIndex = r;
+            isDoiFramework = false;
+          }
+          if (val.includes("nội dung thực hiện") || val.includes("nội dung")) {
+            hasTitle = true;
+            colTitle = colNumber;
+          }
+          if (val === "điểm" || val.includes("điểm")) {
+            hasScore = true;
+            colScore = colNumber;
+          }
+          if (val === "tiêu chí" || val.includes("tiêu chí") || val === "tt" || val === "stt") {
+            hasCategoryOrTT = true;
+            if (val.includes("tiêu chí")) colCategory = colNumber;
+            if (val === "tt" || val === "stt") colTT = colNumber;
+          }
+          if (val.includes("minh chứng") || val.includes("yêu cầu")) {
+            colEvidence = colNumber;
+          }
+        });
+
+        if (hasTitle && (hasScore || hasCategoryOrTT)) {
+          headerRowIndex = r;
+          isDoiFramework = true;
+          break;
+        }
+        if (headerRowIndex !== -1 && !isDoiFramework) break;
       }
+
+      if (headerRowIndex === -1) {
+        throw new Error(
+          "Không tìm thấy dòng tiêu đề bảng tiêu chí trong file. Vui lòng đảm bảo file có các cột: 'Tiêu chí', 'Nội dung thực hiện', 'Điểm', 'Yêu cầu minh chứng'."
+        );
+      }
+
+      setDetectedFormat(isDoiFramework ? "doi_framework" : "technical");
 
       const rows: ImportRow[] = [];
+      const bonusItems: BonusCriterion[] = [];
       const codesSeen = new Set<string>();
       let foundErrors = false;
 
-      worksheet.eachRow((row, rowNumber) => {
-        if (rowNumber === 1) return; // Skip header
+      // ── PARSER 1: MẪU KHUNG TIÊU CHÍ CÔNG TÁC ĐỘI (Thực tế) ──
+      if (isDoiFramework) {
+        let currentCategoryName = "Chung";
+        let inBonusSection = false;
+        let categoryCount = 0;
+        let autoCriterionNum = 1;
 
-        const getCellVal = (colIndex: number) => {
-          const val = row.getCell(colIndex).value;
-          if (val === null || val === undefined) return "";
-          if (typeof val === "object" && "result" in val) return String(val.result || "");
-          return String(val).trim();
-        };
+        worksheet.eachRow((row, rowNumber) => {
+          if (rowNumber <= headerRowIndex) return;
 
-        const categoryCode = getCellVal(1);
-        const categoryName = getCellVal(2);
-        const criterionCode = getCellVal(3);
-        const criterionTitle = getCellVal(4);
-        const description = getCellVal(5);
-        const scoringGuidelines = getCellVal(6);
-        const maxScoreRaw = getCellVal(7);
-        const reqDoc1Raw = getCellVal(8).toUpperCase();
-        const reqDoc2Raw = getCellVal(9).toUpperCase();
-        const reqLink3Raw = getCellVal(10).toUpperCase();
-        const responsibleUnit = getCellVal(11);
-        const deadline = getCellVal(12);
-        const displayOrderRaw = getCellVal(13);
+          const getCellVal = (col: number) => {
+            if (col <= 0) return "";
+            const val = row.getCell(col).value;
+            if (val === null || val === undefined) return "";
+            if (typeof val === "object" && "result" in val) return String(val.result || "");
+            return String(val).trim();
+          };
 
-        const errors: string[] = [];
+          const rawCategory = getCellVal(colCategory);
+          const rawTitle = getCellVal(colTitle);
+          const rawScore = getCellVal(colScore);
+          const rawEvidence = getCellVal(colEvidence);
+          const fullRowText = [rawCategory, rawTitle, rawScore, rawEvidence].join(" ").toLowerCase();
 
-        if (!criterionCode) {
-          errors.push("Thiếu mã tiêu chí (Criterion_Code)");
-        } else if (codesSeen.has(criterionCode.toLowerCase())) {
-          errors.push(`Trùng mã tiêu chí trong file: "${criterionCode}"`);
-        } else {
-          codesSeen.add(criterionCode.toLowerCase());
-        }
+          // Check if this row enters the Bonus section
+          if (
+            fullRowText.includes("điểm thưởng") ||
+            fullRowText.includes("** điểm thưởng") ||
+            rawCategory.includes("ĐIỂM THƯỞNG")
+          ) {
+            inBonusSection = true;
+            return;
+          }
 
-        if (!criterionTitle) {
-          errors.push("Thiếu nội dung tiêu chí (Criterion_Title)");
-        }
+          // Check for summary or note rows to skip
+          if (
+            fullRowText.startsWith("tổng") ||
+            fullRowText.startsWith("tổng điểm") ||
+            fullRowText.includes("ghi chú:") ||
+            fullRowText.includes("xếp loại thi đua")
+          ) {
+            return;
+          }
 
-        const maxScore = parseFloat(maxScoreRaw);
-        if (isNaN(maxScore) || maxScore <= 0) {
-          errors.push("Điểm tối đa phải là số dương lớn hơn 0");
-        }
+          // Empty row
+          if (!rawTitle && !rawCategory && !rawScore) return;
 
-        if (errors.length > 0) {
-          foundErrors = true;
-        }
+          // Carry forward merged category
+          if (rawCategory && !inBonusSection) {
+            // Strip any numeric prefix like "1. ", "2. "
+            currentCategoryName = rawCategory.replace(/^\d+\.\s*/, "").trim();
+            categoryCount++;
+          }
 
-        rows.push({
-          rowIndex: rowNumber,
-          categoryCode,
-          categoryName: categoryName || "Chung",
-          criterionCode,
-          criterionTitle,
-          description,
-          scoringGuidelines,
-          maxScore: isNaN(maxScore) ? 0 : maxScore,
-          reqDoc1: reqDoc1Raw === "TRUE" || reqDoc1Raw === "1",
-          reqDoc2: reqDoc2Raw === "TRUE" || reqDoc2Raw === "1",
-          reqLink3: reqLink3Raw === "TRUE" || reqLink3Raw === "1",
-          responsibleUnit,
-          deadline,
-          displayOrder: parseInt(displayOrderRaw) || rowNumber - 1,
-          errors,
+          // Process normal criteria row
+          if (!inBonusSection) {
+            if (!rawTitle) return; // Skip rows without criterion content
+
+            // Extract Criterion Code: look for "1.1", "2.1", "3.13", etc.
+            let criterionCode = "";
+            let cleanTitle = rawTitle;
+
+            const codeMatch = rawTitle.match(/^(\d+\.\d+)/);
+            if (codeMatch) {
+              criterionCode = codeMatch[1];
+              cleanTitle = rawTitle.replace(/^\d+\.\d+\.?\s*/, "").trim();
+            } else {
+              // Generate code if missing (e.g. 5.1, 6.1)
+              const catNumber = rawCategory.match(/^(\d+)/)?.[1] || String(categoryCount || 1);
+              criterionCode = `${catNumber}.${autoCriterionNum++}`;
+            }
+
+            // Parse score
+            let maxScore = parseFloat(rawScore);
+            if (isNaN(maxScore)) {
+              // Try to find first number in score cell
+              const numMatch = rawScore.match(/\d+(\.\d+)?/);
+              maxScore = numMatch ? parseFloat(numMatch[0]) : 0;
+            }
+
+            const errors: string[] = [];
+            if (codesSeen.has(criterionCode.toLowerCase())) {
+              errors.push(`Trùng mã tiêu chí: "${criterionCode}"`);
+            } else {
+              codesSeen.add(criterionCode.toLowerCase());
+            }
+
+            if (!cleanTitle) {
+              errors.push("Nội dung tiêu chí trống");
+            }
+            if (maxScore <= 0) {
+              errors.push("Điểm tối đa không hợp lệ (phải > 0)");
+            }
+
+            if (errors.length > 0) foundErrors = true;
+
+            rows.push({
+              rowIndex: rowNumber,
+              categoryCode: `CAT_${categoryCount || 1}`,
+              categoryName: currentCategoryName,
+              criterionCode,
+              criterionTitle: cleanTitle,
+              description: rawEvidence || "Thực hiện theo chỉ đạo của Hội đồng Đội",
+              scoringGuidelines: rawEvidence,
+              maxScore: maxScore || 1.0,
+              reqDoc1: true,
+              reqDoc2: true,
+              reqLink3: true,
+              responsibleUnit: "Liên đội",
+              deadline: "",
+              displayOrder: rows.length + 1,
+              errors,
+            });
+          } else {
+            // In Bonus section: extract bonus items
+            if (rawTitle && rawTitle.length > 5) {
+              let bonusCode = "BONUS_OTHER";
+              if (rawTitle.toLowerCase().includes("mô hình") || rawTitle.toLowerCase().includes("sáng tạo")) {
+                bonusCode = "MO_HINH";
+              } else if (rawTitle.toLowerCase().includes("đạt giải") || rawTitle.toLowerCase().includes("cuộc thi")) {
+                bonusCode = "DAT_GIAI";
+              } else if (rawTitle.toLowerCase().includes("trung ương") || rawTitle.toLowerCase().includes("tỉnh chọn cử")) {
+                bonusCode = "CAP_TW";
+              } else if (rawTitle.toLowerCase().includes("đăng cai") || rawTitle.toLowerCase().includes("hỗ trợ tổ chức")) {
+                bonusCode = "DANG_CAI";
+              } else if (rawTitle.toLowerCase().includes("không gian đọc sách") || rawTitle.toLowerCase().includes("tương tác")) {
+                bonusCode = "KHONG_GIAN_DOC";
+              } else {
+                bonusCode = `BONUS_${bonusItems.length + 1}`;
+              }
+
+              const cleanBonusName = rawTitle.replace(/^\d+\.\s*/, "").trim();
+              const score = parseFloat(rawScore) || 1.0;
+
+              bonusItems.push({
+                id: `bonus_${bonusCode.toLowerCase()}`,
+                code: bonusCode,
+                name: cleanBonusName,
+                base_points: score,
+                unit: bonusCode === "DAT_GIAI" ? "học sinh / giải thưởng" : bonusCode === "MO_HINH" ? "mô hình" : "lần",
+                max_points: 5.0,
+                evidence_guidelines: rawEvidence,
+                sort_order: bonusItems.length + 1,
+                is_active: true,
+              });
+            }
+          }
         });
-      });
+
+        setDetectedBonusList(bonusItems.length > 0 ? bonusItems : DEFAULT_BONUS_CRITERIA);
+      } else {
+        // ── PARSER 2: MẪU KỸ THUẬT CHI TIẾT ──
+        worksheet.eachRow((row, rowNumber) => {
+          if (rowNumber <= headerRowIndex) return;
+
+          const getCellVal = (colIndex: number) => {
+            const val = row.getCell(colIndex).value;
+            if (val === null || val === undefined) return "";
+            if (typeof val === "object" && "result" in val) return String(val.result || "");
+            return String(val).trim();
+          };
+
+          const categoryCode = getCellVal(1);
+          const categoryName = getCellVal(2);
+          const criterionCode = getCellVal(3);
+          const criterionTitle = getCellVal(4);
+          const description = getCellVal(5);
+          const scoringGuidelines = getCellVal(6);
+          const maxScoreRaw = getCellVal(7);
+          const reqDoc1Raw = getCellVal(8).toUpperCase();
+          const reqDoc2Raw = getCellVal(9).toUpperCase();
+          const reqLink3Raw = getCellVal(10).toUpperCase();
+          const responsibleUnit = getCellVal(11);
+          const deadline = getCellVal(12);
+          const displayOrderRaw = getCellVal(13);
+
+          if (!criterionCode && !criterionTitle) return;
+
+          const errors: string[] = [];
+          if (!criterionCode) {
+            errors.push("Thiếu mã tiêu chí (Criterion_Code)");
+          } else if (codesSeen.has(criterionCode.toLowerCase())) {
+            errors.push(`Trùng mã tiêu chí trong file: "${criterionCode}"`);
+          } else {
+            codesSeen.add(criterionCode.toLowerCase());
+          }
+
+          if (!criterionTitle) {
+            errors.push("Thiếu nội dung tiêu chí");
+          }
+
+          const maxScore = parseFloat(maxScoreRaw);
+          if (isNaN(maxScore) || maxScore <= 0) {
+            errors.push("Điểm tối đa phải là số dương lớn hơn 0");
+          }
+
+          if (errors.length > 0) foundErrors = true;
+
+          rows.push({
+            rowIndex: rowNumber,
+            categoryCode,
+            categoryName: categoryName || "Chung",
+            criterionCode,
+            criterionTitle,
+            description,
+            scoringGuidelines,
+            maxScore: isNaN(maxScore) ? 0 : maxScore,
+            reqDoc1: reqDoc1Raw === "TRUE" || reqDoc1Raw === "1",
+            reqDoc2: reqDoc2Raw === "TRUE" || reqDoc2Raw === "1",
+            reqLink3: reqLink3Raw === "TRUE" || reqLink3Raw === "1",
+            responsibleUnit,
+            deadline,
+            displayOrder: parseInt(displayOrderRaw) || rows.length + 1,
+            errors,
+          });
+        });
+      }
 
       setPreviewRows(rows);
       setHasErrors(foundErrors);
 
       if (rows.length === 0) {
-        toast.error("File Excel không có dữ liệu nào.");
+        toast.error("File Excel không tìm thấy dòng tiêu chí nào.");
       } else if (foundErrors) {
-        toast.warning(`File có dữ liệu nhưng phát hiện lỗi ở một số dòng.`);
+        toast.warning(`Đã đọc ${rows.length} tiêu chí nhưng có một số dòng chưa hợp lệ.`);
       } else {
-        toast.success(`Đọc thành công ${rows.length} tiêu chí!`);
+        toast.success(`Đọc thành công ${rows.length} tiêu chí từ file Excel!`);
       }
     } catch (err: any) {
       toast.error("Lỗi khi đọc file: " + err.message);
@@ -260,8 +631,8 @@ export default function ImportExportPage() {
         new Set(previewRows.map((r) => r.categoryName.trim()).filter(Boolean))
       );
 
-      for (const catName of uniqueCats) {
-        // check if exists
+      for (let i = 0; i < uniqueCats.length; i++) {
+        const catName = uniqueCats[i];
         const { data: existing } = await supabase
           .from("criteria_categories")
           .select("id")
@@ -273,7 +644,11 @@ export default function ImportExportPage() {
         } else {
           const { data: inserted, error: catError } = await supabase
             .from("criteria_categories")
-            .insert({ name: catName })
+            .insert({
+              name: catName,
+              code: `CAT_${String(i + 1).padStart(2, "0")}`,
+              sort_order: i + 1,
+            })
             .select("id")
             .single();
           if (catError) throw catError;
@@ -281,9 +656,9 @@ export default function ImportExportPage() {
         }
       }
 
-      // 2. Insert valid criteria
+      // 2. Insert valid criteria into criteria_library
       const validRows = previewRows.filter((r) => r.errors.length === 0);
-      const criteriaPayload = validRows.map((r) => ({
+      const criteriaPayload = validRows.map((r, idx) => ({
         code: r.criterionCode,
         title: r.criterionTitle,
         category_id: categoryMap.get(r.categoryName.trim()) || null,
@@ -295,16 +670,47 @@ export default function ImportExportPage() {
         req_link3: r.reqLink3,
         responsible_unit: r.responsibleUnit || null,
         deadline: r.deadline ? new Date(r.deadline).toISOString() : null,
-        sort_order: r.displayOrder,
+        sort_order: r.displayOrder || idx + 1,
         is_active: true,
       }));
 
-      const { error: critError } = await supabase
+      const { data: upsertedLib, error: critError } = await supabase
         .from("criteria_library")
-        .upsert(criteriaPayload, { onConflict: "code" });
+        .upsert(criteriaPayload, { onConflict: "code" })
+        .select("id, code");
+
       if (critError) throw critError;
 
-      // 3. Log into import_jobs
+      // 3. If "Sync Bonus Criteria" is checked, sync the 5 bonus items
+      if (syncBonus && detectedBonusList.length > 0) {
+        await saveBonusCriteriaList(detectedBonusList);
+      }
+
+      // 4. If "Apply to active period" is checked, insert snapshots into period_criteria
+      if (applyToActivePeriod && activePeriod?.id) {
+        const libMap = new Map((upsertedLib ?? []).map((l) => [l.code, l.id]));
+
+        const periodCriteriaPayload = validRows.map((r, idx) => ({
+          period_id: activePeriod.id,
+          source_criteria_id: libMap.get(r.criterionCode) || null,
+          code_snapshot: r.criterionCode,
+          title_snapshot: r.criterionTitle,
+          category_name_snapshot: r.categoryName.trim(),
+          description_snapshot: r.description || null,
+          scoring_snapshot: r.scoringGuidelines || null,
+          max_score_snapshot: r.maxScore,
+          req_doc1: r.reqDoc1,
+          req_doc2: r.reqDoc2,
+          req_link3: r.reqLink3,
+          responsible_unit_snapshot: r.responsibleUnit || null,
+          deadline_snapshot: r.deadline ? new Date(r.deadline).toISOString() : null,
+          sort_order: r.displayOrder || idx + 1,
+        }));
+
+        await supabase.from("period_criteria").insert(periodCriteriaPayload);
+      }
+
+      // 5. Log into import_jobs
       await supabase.from("import_jobs").insert({
         imported_by: profile?.id || null,
         file_name: fileName,
@@ -320,7 +726,11 @@ export default function ImportExportPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["criteria_library"] });
       queryClient.invalidateQueries({ queryKey: ["criteria_categories"] });
-      toast.success("Import dữ liệu vào thư viện tiêu chí thành công!");
+      queryClient.invalidateQueries({ queryKey: ["admin_bonus_criteria_catalog"] });
+      queryClient.invalidateQueries({ queryKey: ["bonus_criteria_catalog"] });
+      toast.success(
+        `Import thành công ${previewRows.filter((r) => r.errors.length === 0).length} tiêu chí vào hệ thống!`
+      );
       setPreviewRows([]);
       setFileName("");
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -328,89 +738,35 @@ export default function ImportExportPage() {
     onError: (err: Error) => toast.error("Lỗi khi import: " + err.message),
   });
 
-  // ============================================================
-  // Export Master Criteria
-  // ============================================================
-  const exportMasterCriteria = async () => {
-    try {
-      const { data: criteria, error } = await supabase
-        .from("criteria_library")
-        .select("*, category:criteria_categories(*)")
-        .order("sort_order", { ascending: true });
-      if (error) throw error;
+  // Calculate total score of parsed criteria
+  const totalParsedScore = useMemo(() => {
+    return previewRows.reduce((acc, r) => acc + (r.maxScore || 0), 0);
+  }, [previewRows]);
 
-      const workbook = new ExcelJS.Workbook();
-      const sheet = workbook.addWorksheet("Bo_Tieu_Chi_Chinh_Thuc");
-
-      sheet.columns = [
-        { header: "STT", key: "stt", width: 8 },
-        { header: "Mã tiêu chí", key: "code", width: 15 },
-        { header: "Nhóm tiêu chí", key: "category", width: 25 },
-        { header: "Nội dung tiêu chí", key: "title", width: 45 },
-        { header: "Điểm tối đa", key: "max_score", width: 14 },
-        { header: "Văn bản", key: "req_doc1", width: 12 },
-        { header: "Báo cáo", key: "req_doc2", width: 12 },
-        { header: "Tin bài", key: "req_link3", width: 12 },
-        { header: "Đơn vị phụ trách", key: "unit", width: 25 },
-        { header: "Trạng thái", key: "status", width: 15 },
-      ];
-
-      (criteria ?? []).forEach((c: any, idx) => {
-        sheet.addRow({
-          stt: idx + 1,
-          code: c.code,
-          category: c.category?.name || "Chung",
-          title: c.title,
-          max_score: c.max_score,
-          req_doc1: c.req_doc1 ? "Có" : "Không",
-          req_doc2: c.req_doc2 ? "Có" : "Không",
-          req_link3: c.req_link3 ? "Có" : "Không",
-          unit: c.responsible_unit || "",
-          status: c.is_active ? "Áp dụng" : "Khóa",
-        });
-      });
-
-      // Style header
-      sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
-      sheet.getRow(1).fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FF1E3A5F" },
-      };
-
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Danh_Sach_Tieu_Chi_${new Date().toISOString().slice(0, 10)}.xlsx`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success("Đã xuất danh sách tiêu chí thành công!");
-    } catch (err: any) {
-      toast.error("Lỗi khi xuất file: " + err.message);
-    }
-  };
+  // Unique categories count
+  const uniqueCategoryCount = useMemo(() => {
+    return new Set(previewRows.map((r) => r.categoryName.trim()).filter(Boolean)).size;
+  }, [previewRows]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-slate-900">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Import / Export Excel</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Nạp danh sách bộ tiêu chí hàng loạt từ file Excel và xuất báo cáo kết quả theo mẫu chuẩn
+        <h1 className="text-2xl font-extrabold tracking-tight text-slate-950">
+          Import / Export Tiêu chí Excel
+        </h1>
+        <p className="text-sm text-slate-700 mt-1">
+          Nạp danh sách bộ tiêu chí hàng loạt từ file Excel và xuất dữ liệu tiêu chí Công tác Đội
         </p>
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-        <TabsList className="grid w-full sm:w-[360px] grid-cols-2">
-          <TabsTrigger value="import" className="gap-2">
+        <TabsList className="grid w-full sm:w-[380px] grid-cols-2 rounded-xl">
+          <TabsTrigger value="import" className="gap-2 font-bold text-xs rounded-lg">
             <Upload className="h-4 w-4" />
             Nhập tiêu chí (Import)
           </TabsTrigger>
-          <TabsTrigger value="export" className="gap-2">
+          <TabsTrigger value="export" className="gap-2 font-bold text-xs rounded-lg">
             <Download className="h-4 w-4" />
             Xuất dữ liệu (Export)
           </TabsTrigger>
@@ -419,150 +775,178 @@ export default function ImportExportPage() {
         {/* TAB 1: IMPORT */}
         <TabsContent value="import" className="space-y-6 mt-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Step 1: Download Template */}
-            <Card>
+            {/* Step 1: Download Templates */}
+            <Card className="border-emerald-200 shadow-2xs rounded-2xl">
               <CardHeader className="pb-3">
-                <Badge variant="outline" className="w-fit mb-1 border-blue-200 text-blue-700 bg-blue-50">
+                <Badge className="w-fit mb-1 bg-emerald-700 text-white font-bold">
                   Bước 1
                 </Badge>
-                <CardTitle className="text-base">Tải file mẫu chuẩn</CardTitle>
-                <CardDescription>
-                  Tải mẫu Excel chuẩn định dạng PRD với đầy đủ cấu trúc 13 cột bắt buộc.
+                <CardTitle className="text-base font-bold text-slate-950">Tải file mẫu Excel</CardTitle>
+                <CardDescription className="text-xs text-slate-600 font-medium">
+                  Hệ thống hỗ trợ cả file Khung tiêu chí Đội thực tế (cột Tiêu chí, Nội dung thực hiện, Điểm) và file kỹ thuật.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <Button variant="outline" className="w-full gap-2 border-slate-300" onClick={downloadTemplate}>
-                  <Download className="h-4 w-4" />
-                  Tải file mẫu (.xlsx)
+              <CardContent className="space-y-2">
+                <Button
+                  variant="outline"
+                  className="w-full gap-2 border-emerald-300 text-emerald-800 hover:bg-emerald-50 font-bold text-xs h-9 rounded-xl justify-start"
+                  onClick={downloadDoiFrameworkTemplate}
+                >
+                  <FileSpreadsheet className="h-4 w-4 text-emerald-700 shrink-0" />
+                  <span className="truncate">Mẫu Khung Tiêu chí Đội (Chuẩn)</span>
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  className="w-full gap-2 text-slate-700 hover:bg-slate-100 font-medium text-xs h-8 rounded-xl justify-start"
+                  onClick={downloadTechnicalTemplate}
+                >
+                  <Download className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">Mẫu kỹ thuật chi tiết (.xlsx)</span>
                 </Button>
               </CardContent>
             </Card>
 
             {/* Step 2: Upload File */}
-            <Card className="md:col-span-2">
+            <Card className="md:col-span-2 border-emerald-200 shadow-2xs rounded-2xl">
               <CardHeader className="pb-3">
-                <Badge variant="outline" className="w-fit mb-1 border-emerald-200 text-emerald-700 bg-emerald-50">
+                <Badge className="w-fit mb-1 bg-emerald-700 text-white font-bold">
                   Bước 2
                 </Badge>
-                <CardTitle className="text-base">Tải lên file dữ liệu</CardTitle>
-                <CardDescription>
-                  Chọn file Excel (.xlsx) đã điền dữ liệu tiêu chí để hệ thống kiểm tra và nạp dữ liệu.
+                <CardTitle className="text-base font-bold text-slate-950">Tải lên file Excel</CardTitle>
+                <CardDescription className="text-xs text-slate-600 font-medium">
+                  Chọn file Excel chứa khung tiêu chí để hệ thống tự động bóc tách nhóm, từng tiêu chí, điểm số và yêu cầu minh chứng.
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col sm:flex-row items-center gap-3">
                   <input
                     ref={fileInputRef}
                     type="file"
                     accept=".xlsx, .xls"
                     onChange={handleFileUpload}
-                    className="hidden"
-                    id="excel-file-input"
+                    className="block w-full text-xs text-slate-700 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-emerald-700 file:text-white hover:file:bg-emerald-800 cursor-pointer"
                   />
-                  <label htmlFor="excel-file-input" className="cursor-pointer">
-                    <Button variant="secondary" asChild disabled={parsing}>
-                      <span>
-                        {parsing ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <Upload className="h-4 w-4 mr-2" />
-                        )}
-                        {fileName ? "Chọn file khác" : "Chọn file Excel..."}
-                      </span>
-                    </Button>
-                  </label>
-                  {fileName && (
-                    <span className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
-                      <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
-                      {fileName}
-                    </span>
+                  {parsing && (
+                    <div className="flex items-center gap-2 text-xs font-bold text-emerald-800 shrink-0">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Đang phân tích file...</span>
+                    </div>
                   )}
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Preview Table */}
+          {/* Step 3: Preview Data & Options */}
           {previewRows.length > 0 && (
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-3">
-                <div>
-                  <CardTitle className="text-base">
-                    Xem trước dữ liệu ({previewRows.length} dòng)
-                  </CardTitle>
-                  <CardDescription>
-                    {hasErrors ? (
-                      <span className="text-red-600 font-medium flex items-center gap-1 mt-1">
-                        <AlertTriangle className="h-4 w-4" />
-                        Phát hiện dòng có lỗi dữ liệu. Vui lòng kiểm tra các dòng màu đỏ trước khi nạp.
-                      </span>
+            <Card className="border-emerald-200 shadow-2xs rounded-2xl overflow-hidden">
+              <CardHeader className="pb-3 border-b border-emerald-100 bg-white">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-base font-bold text-slate-950">
+                        Xem trước dữ liệu ({previewRows.length} tiêu chí)
+                      </CardTitle>
+                      {detectedFormat === "doi_framework" && (
+                        <Badge className="bg-emerald-100 text-emerald-900 border-emerald-300 font-bold text-[10px]">
+                          ✓ Khung tiêu chí Đội thực tế
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-600 font-medium mt-0.5">
+                      Đã nhận diện: <b>{uniqueCategoryCount} nhóm tiêu chí</b> • Tổng điểm:{" "}
+                      <b className="text-emerald-800 font-black">{totalParsedScore} điểm</b>
+                    </p>
+                  </div>
+
+                  <Button
+                    onClick={() => commitImportMutation.mutate()}
+                    disabled={commitImportMutation.isPending || previewRows.filter((r) => r.errors.length === 0).length === 0}
+                    className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs h-9 rounded-xl gap-2 shadow-sm"
+                  >
+                    {commitImportMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Đang lưu dữ liệu...
+                      </>
                     ) : (
-                      <span className="text-emerald-600 font-medium flex items-center gap-1 mt-1">
+                      <>
                         <CheckCircle2 className="h-4 w-4" />
-                        Dữ liệu hợp lệ, sẵn sàng lưu vào hệ thống.
-                      </span>
+                        Xác nhận Nhập ({previewRows.filter((r) => r.errors.length === 0).length} tiêu chí)
+                      </>
                     )}
-                  </CardDescription>
+                  </Button>
                 </div>
-                <Button
-                  onClick={() => commitImportMutation.mutate()}
-                  disabled={commitImportMutation.isPending || previewRows.filter((r) => r.errors.length === 0).length === 0}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
-                >
-                  {commitImportMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <FileCheck className="h-4 w-4" />
+
+                {/* Import Options */}
+                <div className="pt-3 flex flex-col sm:flex-row gap-4 border-t border-slate-100 mt-2 text-xs">
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-900">
+                    <Checkbox
+                      checked={syncBonus}
+                      onCheckedChange={(c) => setSyncBonus(!!c)}
+                    />
+                    <span>
+                      Đồng thời cập nhật 5 mã Điểm thưởng vào hệ thống (MO_HINH, DAT_GIAI, CAP_TW, DANG_CAI, KHONG_GIAN_DOC)
+                    </span>
+                  </label>
+
+                  {activePeriod && (
+                    <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-900">
+                      <Checkbox
+                        checked={applyToActivePeriod}
+                        onCheckedChange={(c) => setApplyToActivePeriod(!!c)}
+                      />
+                      <span>
+                        Áp dụng ngay vào đợt đang mở: <b>{activePeriod.name}</b>
+                      </span>
+                    </label>
                   )}
-                  Lưu vào hệ thống
-                </Button>
+                </div>
               </CardHeader>
+
               <CardContent className="p-0">
-                <div className="overflow-x-auto max-h-96">
+                <div className="overflow-x-auto max-h-[500px]">
                   <Table>
-                    <TableHeader>
+                    <TableHeader className="bg-emerald-50/70 sticky top-0 z-10 border-b border-emerald-200">
                       <TableRow>
-                        <TableHead className="w-[60px]">Dòng</TableHead>
-                        <TableHead className="w-[90px]">Mã</TableHead>
-                        <TableHead className="w-[140px]">Nhóm</TableHead>
-                        <TableHead>Nội dung tiêu chí</TableHead>
-                        <TableHead className="w-[80px] text-center">Điểm</TableHead>
-                        <TableHead className="w-[130px]">Minh chứng</TableHead>
-                        <TableHead className="w-[200px]">Trạng thái kiểm tra</TableHead>
+                        <TableHead className="w-12 font-bold text-slate-950">Dòng</TableHead>
+                        <TableHead className="w-24 font-bold text-slate-950">Mã</TableHead>
+                        <TableHead className="w-48 font-bold text-slate-950">Nhóm tiêu chí</TableHead>
+                        <TableHead className="font-bold text-slate-950">Nội dung thực hiện</TableHead>
+                        <TableHead className="w-20 text-center font-bold text-slate-950">Điểm</TableHead>
+                        <TableHead className="w-60 font-bold text-slate-950">Yêu cầu minh chứng</TableHead>
+                        <TableHead className="w-28 font-bold text-slate-950">Trạng thái</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {previewRows.map((row) => (
                         <TableRow
                           key={row.rowIndex}
-                          className={row.errors.length > 0 ? "bg-red-50/70" : undefined}
+                          className={row.errors.length > 0 ? "bg-red-50/50" : "hover:bg-emerald-50/30"}
                         >
-                          <TableCell className="font-mono text-xs">{row.rowIndex}</TableCell>
-                          <TableCell className="font-mono text-xs font-semibold">{row.criterionCode || "—"}</TableCell>
-                          <TableCell className="text-xs">{row.categoryName}</TableCell>
-                          <TableCell className="text-xs font-medium">{row.criterionTitle}</TableCell>
-                          <TableCell className="text-center font-semibold text-blue-700">{row.maxScore}đ</TableCell>
-                          <TableCell className="text-[11px] text-muted-foreground">
-                            {[
-                              row.reqDoc1 ? "VB" : null,
-                              row.reqDoc2 ? "BC" : null,
-                              row.reqLink3 ? "Tin" : null,
-                            ]
-                              .filter(Boolean)
-                              .join(" + ") || "Không"}
+                          <TableCell className="font-mono text-xs text-slate-500">{row.rowIndex}</TableCell>
+                          <TableCell className="font-mono text-xs font-bold text-slate-950">
+                            {row.criterionCode}
+                          </TableCell>
+                          <TableCell className="text-xs font-bold text-slate-800">
+                            {row.categoryName}
+                          </TableCell>
+                          <TableCell className="text-xs font-medium text-slate-950 max-w-md">
+                            {row.criterionTitle}
+                          </TableCell>
+                          <TableCell className="text-center font-bold text-xs text-slate-950">
+                            {row.maxScore}đ
+                          </TableCell>
+                          <TableCell className="text-xs text-slate-600 max-w-xs truncate" title={row.scoringGuidelines}>
+                            {row.scoringGuidelines || "—"}
                           </TableCell>
                           <TableCell>
-                            {row.errors.length > 0 ? (
-                              <div className="space-y-0.5">
-                                {row.errors.map((err, i) => (
-                                  <p key={i} className="text-xs text-red-600 font-medium">
-                                    • {err}
-                                  </p>
-                                ))}
-                              </div>
+                            {row.errors.length === 0 ? (
+                              <Badge className="bg-emerald-700 text-white font-bold text-[10px]">Hợp lệ</Badge>
                             ) : (
-                              <Badge variant="outline" className="text-emerald-700 border-emerald-300 bg-emerald-50 text-[10px]">
-                                Hợp lệ
+                              <Badge variant="destructive" className="text-[10px] font-bold" title={row.errors.join(", ")}>
+                                {row.errors[0]}
                               </Badge>
                             )}
                           </TableCell>
@@ -577,52 +961,24 @@ export default function ImportExportPage() {
         </TabsContent>
 
         {/* TAB 2: EXPORT */}
-        <TabsContent value="export" className="space-y-4 mt-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-700">
-                    <FileSpreadsheet className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base">Xuất bộ tiêu chí gốc</CardTitle>
-                    <CardDescription>
-                      Xuất toàn bộ danh sách tiêu chí hiện có trong thư viện ra file Excel.
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <Button onClick={exportMasterCriteria} className="w-full gap-2">
-                  <Download className="h-4 w-4" />
-                  Xuất file Excel tiêu chí
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700">
-                    <FileCheck className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base">Xuất kết quả đánh giá</CardTitle>
-                    <CardDescription>
-                      Xuất điểm số và tiến độ thẩm định của các Liên đội theo đợt đánh giá.
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <Button variant="outline" className="w-full gap-2" onClick={() => toast.info("Tính năng xuất kết quả theo đợt sẽ hoạt động sau khi có dữ liệu thẩm định ở Phase 4.")}>
-                  <Download className="h-4 w-4" />
-                  Xuất báo cáo kết quả
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
+        <TabsContent value="export" className="space-y-6 mt-4">
+          <Card className="border-emerald-200 shadow-2xs rounded-2xl">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-bold text-slate-950">Xuất danh sách tiêu chí chính thức</CardTitle>
+              <CardDescription className="text-xs text-slate-600 font-medium">
+                Tải xuống toàn bộ danh sách tiêu chí hiện có trong Thư viện tiêu chí dưới định dạng Excel.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                onClick={downloadDoiFrameworkTemplate}
+                className="gap-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs h-9 rounded-xl"
+              >
+                <Download className="h-4 w-4" />
+                Xuất file Excel Khung Tiêu Chí Đội (.xlsx)
+              </Button>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
