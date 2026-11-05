@@ -74,8 +74,38 @@ export async function exportReviewExcel({
     orgPeriodQuery = orgPeriodQuery.eq("organization_id", targetOrgId);
   }
 
-  const { data: orgPeriods, error: opErr } = await orgPeriodQuery;
+  const { data: initialOrgPeriods, error: opErr } = await orgPeriodQuery;
   if (opErr) throw opErr;
+
+  let orgPeriods = initialOrgPeriods ?? [];
+
+  if (orgPeriods.length === 0 && targetOrgId && targetOrgId !== "all") {
+    // If unit is participating but not yet assigned, fetch organization and create assignment
+    const { data: orgData } = await supabase
+      .from("organizations")
+      .select("*")
+      .eq("id", targetOrgId)
+      .maybeSingle();
+
+    if (orgData) {
+      const { data: newOp } = await supabase
+        .from("organization_periods")
+        .insert({
+          period_id: period.id,
+          organization_id: targetOrgId,
+          status: "in_progress",
+        })
+        .select("id, organization_id, status")
+        .single();
+
+      if (newOp) {
+        orgPeriods = [{
+          ...newOp,
+          organization: orgData,
+        }];
+      }
+    }
+  }
 
   if (!orgPeriods || orgPeriods.length === 0) {
     throw new Error("Không tìm thấy đơn vị nào được phân công trong đợt đánh giá này.");
@@ -252,8 +282,11 @@ export async function exportReviewExcel({
         const links: string[] = [];
 
         evidenceItems.forEach((ev) => {
-          if (ev.url) links.push(ev.url);
-          else if (ev.file_name && (ev.file_name.startsWith("http://") || ev.file_name.startsWith("https://"))) {
+          if (ev.external_url) {
+            links.push(ev.external_url);
+          } else if (ev.url) {
+            links.push(ev.url);
+          } else if (ev.file_name && (ev.file_name.startsWith("http://") || ev.file_name.startsWith("https://"))) {
             links.push(ev.file_name);
           }
         });
@@ -522,7 +555,19 @@ export async function exportReviewExcel({
     .replace(/\s+/g, "_")
     .replace(/[^a-z0-9_]/gi, "");
 
-  const fileName = `Ket_Qua_Tham_Dinh_${periodSlug}.xlsx`;
+  let fileName = `Ket_Qua_Tham_Dinh_${periodSlug}.xlsx`;
+  if (targetOrgId && targetOrgId !== "all" && orgPeriods.length > 0) {
+    const orgName = (orgPeriods[0].organization as any)?.name || "";
+    const cleanOrg = orgName
+      .normalize("NFC")
+      .replace(/^Liên\s*đội\s*/i, "")
+      .replace(/^Trường\s*/i, "")
+      .trim()
+      .replace(/\s+/g, "_")
+      .replace(/[\\/?*[\]:]/g, "");
+    fileName = `Bao_cao_Lien_doi_${cleanOrg}_${periodSlug}.xlsx`;
+  }
+
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

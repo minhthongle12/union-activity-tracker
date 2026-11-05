@@ -7,6 +7,7 @@ import { useGlobalLoading } from "@/contexts/LoadingContext";
 import { triggerPushNotification } from "@/lib/push";
 import { notifyAdmins } from "@/lib/notificationService";
 import { recordAuditLog } from "@/lib/auditLog";
+import { exportReviewExcel } from "@/lib/exportReviewExcel";
 import type {
   EvaluationPeriod,
   PeriodCriterion,
@@ -40,6 +41,7 @@ import {
   ArrowRight,
   Clock,
   Sparkles,
+  FileSpreadsheet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -169,6 +171,7 @@ export default function UserCriteriaPage() {
   // Filter inside Periods Overview
   const [periodSearch, setPeriodSearch] = useState("");
   const [periodStatusFilter, setPeriodStatusFilter] = useState("all");
+  const [isExporting, setIsExporting] = useState(false);
 
   // 1. Fetch ALL evaluation periods sorted newest first
   const { data: allPeriods, isLoading: periodsLoading } = useQuery({
@@ -515,6 +518,27 @@ export default function UserCriteriaPage() {
     }
   };
 
+  // User Action: Export Excel for this unit
+  const handleExportExcel = async () => {
+    if (!selectedPeriod || !profile?.organization_id) {
+      toast.error("Không tìm thấy thông tin đợt đánh giá hoặc đơn vị của bạn.");
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      await exportReviewExcel({
+        period: selectedPeriod,
+        targetOrgId: profile.organization_id,
+      });
+      toast.success("Xuất file báo cáo Excel thành công!");
+    } catch (err: any) {
+      toast.error("Lỗi khi xuất Excel: " + (err.message || err));
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   // ============================================================
   // VIEW 1: PERIODS OVERVIEW (When no period is selected)
   // Sắp xếp đợt mới nhất lên đầu, nhấn vào từng đợt để xem tiêu chí!
@@ -713,33 +737,52 @@ export default function UserCriteriaPage() {
       </div>
 
       {/* Page Header of Selected Period */}
-      <div className="space-y-1">
-        <div className="flex items-center gap-2 text-sm text-emerald-800 font-bold flex-wrap">
-          <Calendar className="h-4 w-4" />
-          <span>{selectedPeriod.name}</span>
-          <Badge
-            className={cn(
-              "text-[11px] ml-1 font-bold",
-              selectedPeriod.status === "active"
-                ? "bg-emerald-700 text-white"
-                : "bg-slate-200 text-slate-700"
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-sm text-emerald-800 font-bold flex-wrap">
+            <Calendar className="h-4 w-4" />
+            <span>{selectedPeriod.name}</span>
+            <Badge
+              className={cn(
+                "text-[11px] ml-1 font-bold",
+                selectedPeriod.status === "active"
+                  ? "bg-emerald-700 text-white"
+                  : "bg-slate-200 text-slate-700"
+              )}
+            >
+              {selectedPeriod.status === "active" ? "Đang mở nộp" : selectedPeriod.status}
+            </Badge>
+            {selectedPeriod.submission_deadline && (
+              <span className="text-xs text-slate-600 font-medium">
+                (Hạn nộp: {formatDateDisplay(selectedPeriod.submission_deadline)})
+              </span>
             )}
-          >
-            {selectedPeriod.status === "active" ? "Đang mở nộp" : selectedPeriod.status}
-          </Badge>
-          {selectedPeriod.submission_deadline && (
-            <span className="text-xs text-slate-600 font-medium">
-              (Hạn nộp: {formatDateDisplay(selectedPeriod.submission_deadline)})
-            </span>
-          )}
+          </div>
+          <h1 className="text-2xl font-extrabold tracking-tight text-slate-950">
+            Bộ tiêu chí đánh giá
+          </h1>
+          <p className="text-sm text-slate-700 flex items-center gap-1.5 font-medium">
+            <Building className="h-4 w-4 text-emerald-700" />
+            Đơn vị: <b className="text-black font-bold">{profile?.display_name || "Liên đội"}</b>
+          </p>
         </div>
-        <h1 className="text-2xl font-extrabold tracking-tight text-slate-950">
-          Bộ tiêu chí đánh giá
-        </h1>
-        <p className="text-sm text-slate-700 flex items-center gap-1.5 font-medium">
-          <Building className="h-4 w-4 text-emerald-700" />
-          Đơn vị: <b className="text-black font-bold">{profile?.display_name || "Liên đội"}</b>
-        </p>
+
+        {/* Nút Xuất Excel báo cáo của đơn vị */}
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            size="sm"
+            onClick={handleExportExcel}
+            disabled={isExporting}
+            className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs gap-1.5 shadow-sm h-9 px-3.5"
+          >
+            {isExporting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileSpreadsheet className="h-4 w-4" />
+            )}
+            {isExporting ? "Đang xuất Excel..." : "Xuất Excel"}
+          </Button>
+        </div>
       </div>
 
       {/* KPI & Progress Top Cards */}
