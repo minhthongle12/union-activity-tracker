@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import type { EvidenceItem, EvidenceType } from "@/types/database";
@@ -18,6 +19,7 @@ import {
   Eye,
   Download,
   Loader2,
+  ArrowRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getEvidenceSignedUrl } from "@/lib/storage";
@@ -28,7 +30,7 @@ async function fetchUserEvidenceRepository(orgId?: string | null) {
   // Query all submissions for this org
   const { data: orgPeriods } = await supabase
     .from("organization_periods")
-    .select("id")
+    .select("id, period_id")
     .eq("organization_id", orgId);
 
   const orgPeriodIds = (orgPeriods ?? []).map((op) => op.id);
@@ -38,7 +40,9 @@ async function fetchUserEvidenceRepository(orgId?: string | null) {
     .from("submissions")
     .select(`
       id,
-      period_criterion:period_criteria(code_snapshot, title_snapshot)
+      organization_period_id,
+      period_criteria_id,
+      period_criterion:period_criteria(id, period_id, code_snapshot, title_snapshot)
     `)
     .in("organization_period_id", orgPeriodIds);
 
@@ -63,8 +67,11 @@ async function fetchUserEvidenceRepository(orgId?: string | null) {
   return (items ?? []).map((item: any) => {
     const rev = revs?.find((r) => r.id === item.revision_id);
     const sub: any = subs?.find((s) => s.id === rev?.submission_id);
+    const op = (orgPeriods ?? []).find((o) => o.id === sub?.organization_period_id);
     return {
       ...item,
+      periodId: sub?.period_criterion?.period_id || op?.period_id,
+      criterionId: sub?.period_criteria_id,
       criterionCode: sub?.period_criterion?.code_snapshot || "—",
       criterionTitle: sub?.period_criterion?.title_snapshot || "—",
     };
@@ -73,6 +80,7 @@ async function fetchUserEvidenceRepository(orgId?: string | null) {
 
 export default function EvidencePage() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
 
@@ -187,19 +195,35 @@ export default function EvidencePage() {
               <Table>
                 <TableHeader className="bg-emerald-50/70 border-b border-emerald-200">
                   <TableRow>
-                    <TableHead className="w-[100px] font-bold text-slate-950">Tiêu chí</TableHead>
+                    <TableHead className="w-[120px] font-bold text-slate-950">Tiêu chí</TableHead>
                     <TableHead className="font-bold text-slate-950">Tên tệp / Tiêu đề liên kết</TableHead>
                     <TableHead className="w-[180px] font-bold text-slate-950">Loại minh chứng</TableHead>
                     <TableHead className="w-[120px] font-bold text-slate-950">Dung lượng</TableHead>
                     <TableHead className="w-[140px] font-bold text-slate-950">Ngày nộp</TableHead>
-                    <TableHead className="w-[90px] text-right font-bold text-slate-950">Xem</TableHead>
+                    <TableHead className="w-[110px] text-right font-bold text-slate-950">Thao tác</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.map((item: any) => (
                     <TableRow key={item.id} className="hover:bg-emerald-50/30">
-                      <TableCell className="font-mono text-xs font-black text-slate-950">
-                        {item.criterionCode}
+                      <TableCell>
+                        {item.periodId && item.criterionCode !== "—" ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              navigate(
+                                `/user/criteria?period=${item.periodId}&search=${encodeURIComponent(item.criterionCode)}`
+                              )
+                            }
+                            className="font-mono text-xs font-bold text-emerald-800 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-2 py-1 rounded-md flex items-center gap-1 transition-all cursor-pointer group shadow-2xs"
+                            title={`Xem tiêu chí [${item.criterionCode}] ${item.criterionTitle}`}
+                          >
+                            <span>[{item.criterionCode}]</span>
+                            <ArrowRight className="h-3 w-3 text-emerald-600 group-hover:translate-x-0.5 transition-transform" />
+                          </button>
+                        ) : (
+                          <span className="font-mono text-xs font-semibold text-slate-500">[{item.criterionCode}]</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -221,32 +245,50 @@ export default function EvidencePage() {
                         {new Date(item.created_at).toLocaleDateString("vi-VN")}
                       </TableCell>
                       <TableCell className="text-right">
-                        {item.external_url ? (
-                          <a
-                            href={item.external_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex p-1.5 text-slate-700 hover:text-emerald-800 rounded-md hover:bg-emerald-50"
-                            title="Mở liên kết"
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                          </a>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-slate-700 hover:text-emerald-800 hover:bg-emerald-50"
-                            onClick={() => handleDownloadFile(item)}
-                            disabled={downloadingId === item.id}
-                            title="Tải tệp"
-                          >
-                            {downloadingId === item.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin text-emerald-700" />
-                            ) : (
-                              <Download className="h-4 w-4" />
-                            )}
-                          </Button>
-                        )}
+                        <div className="flex items-center justify-end gap-1">
+                          {item.external_url ? (
+                            <a
+                              href={item.external_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex p-1.5 text-slate-700 hover:text-emerald-800 rounded-md hover:bg-emerald-50 transition-colors"
+                              title="Mở liên kết"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-slate-700 hover:text-emerald-800 hover:bg-emerald-50"
+                              onClick={() => handleDownloadFile(item)}
+                              disabled={downloadingId === item.id}
+                              title="Tải tệp"
+                            >
+                              {downloadingId === item.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin text-emerald-700" />
+                              ) : (
+                                <Download className="h-4 w-4" />
+                              )}
+                            </Button>
+                          )}
+
+                          {item.periodId && item.criterionCode !== "—" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50"
+                              onClick={() =>
+                                navigate(
+                                  `/user/criteria?period=${item.periodId}&search=${encodeURIComponent(item.criterionCode)}`
+                                )
+                              }
+                              title={`Chuyển tới tiêu chí ${item.criterionCode}`}
+                            >
+                              <ArrowRight className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

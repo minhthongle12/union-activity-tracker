@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
@@ -162,11 +162,18 @@ export default function UserCriteriaPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const periodParam = searchParams.get("period");
+  const searchParam = searchParams.get("search") || "";
 
   // Filter & Search inside Criteria View
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(searchParam);
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+
+  useEffect(() => {
+    if (searchParam) {
+      setSearch(searchParam);
+    }
+  }, [searchParam]);
 
   // Filter inside Periods Overview
   const [periodSearch, setPeriodSearch] = useState("");
