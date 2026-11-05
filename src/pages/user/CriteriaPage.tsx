@@ -603,7 +603,7 @@ export default function UserCriteriaPage() {
                         p.status === "active"
                           ? "bg-emerald-600 hover:bg-emerald-600 text-white"
                           : p.status === "closed"
-                          ? "bg-blue-600 hover:bg-blue-600 text-white"
+                          ? "bg-teal-600 hover:bg-teal-600 text-white"
                           : p.status === "archived"
                           ? "bg-slate-100 text-slate-700 border border-slate-300"
                           : "bg-amber-100 text-amber-800 border border-amber-300"
@@ -760,9 +760,9 @@ export default function UserCriteriaPage() {
               <span className="text-muted-foreground block">Tổng tiêu chí</span>
               <span className="text-lg font-bold text-slate-900">{totalCriteria}</span>
             </div>
-            <div className="p-2.5 rounded-md bg-blue-50 border border-blue-100">
-              <span className="text-blue-700 block">Đã nộp</span>
-              <span className="text-lg font-bold text-blue-800">{submittedCount}</span>
+            <div className="p-2.5 rounded-xl bg-lime-50/80 border border-lime-200/80">
+              <span className="text-lime-900 block font-medium">Đã nộp</span>
+              <span className="text-lg font-bold text-emerald-800">{submittedCount}</span>
             </div>
             <div className="p-2.5 rounded-md bg-emerald-50 border border-emerald-100">
               <span className="text-emerald-700 block">Đã xác thực</span>
@@ -822,20 +822,20 @@ export default function UserCriteriaPage() {
       <div className="space-y-3">
         {criteriaLoading || subLoading ? (
           <div className="p-12 text-center text-sm text-muted-foreground space-y-2">
-            <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-600" />
+            <Loader2 className="h-6 w-6 animate-spin mx-auto text-emerald-600" />
             <p>Đang tải danh sách tiêu chí đánh giá...</p>
           </div>
         ) : filteredItems.length === 0 ? (
           libraryCriteria && libraryCriteria.length > 0 ? (
             <div className="space-y-4">
-              <Card className="border-blue-200 bg-blue-50/70 p-4">
+              <Card className="border-emerald-200/90 bg-emerald-50/70 p-4 rounded-2xl">
                 <div className="flex items-start gap-3">
-                  <AlertCircle className="h-5 w-5 text-blue-700 shrink-0 mt-0.5" />
+                  <AlertCircle className="h-5 w-5 text-emerald-700 shrink-0 mt-0.5" />
                   <div className="space-y-1 text-xs">
-                    <p className="font-semibold text-blue-900 text-sm">
+                    <p className="font-semibold text-emerald-950 text-sm">
                       Đang hiển thị danh mục tiêu chí tham khảo ({libraryCriteria.length} tiêu chí gốc)
                     </p>
-                    <p className="text-blue-800">
+                    <p className="text-emerald-800">
                       Đợt đánh giá này chưa được phân bổ tiêu chí hoặc Quản trị viên chưa cấu hình áp dụng tiêu chí cho đợt.
                     </p>
                   </div>

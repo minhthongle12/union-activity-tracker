@@ -184,7 +184,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="flex justify-end pt-2">
-        <Button onClick={handleSave} className="gap-2 bg-blue-600 hover:bg-blue-700">
+        <Button onClick={handleSave} className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-md shadow-emerald-700/20 font-semibold">
           <Save className="h-4 w-4" />
           Lưu thay đổi cài đặt
         </Button>

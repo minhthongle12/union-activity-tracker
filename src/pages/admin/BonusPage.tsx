@@ -284,12 +284,12 @@ export default function AdminBonusPage() {
                         {item.organization?.name || "Liên đội"}
                       </Badge>
                       {item.period?.name && (
-                        <Badge variant="outline" className="text-xs gap-1 bg-blue-50 text-blue-700 border-blue-200">
+                        <Badge variant="outline" className="text-xs gap-1 bg-emerald-50 text-emerald-800 border-emerald-200">
                           <Calendar className="h-3 w-3" />
                           {item.period.name}
                         </Badge>
                       )}
-                      {item.status === "submitted" && <Badge className="bg-blue-600 text-white">Chờ duyệt</Badge>}
+                      {item.status === "submitted" && <Badge className="bg-teal-600 text-white">Chờ duyệt</Badge>}
                       {item.status === "approved" && <Badge className="bg-emerald-600 text-white">Đã duyệt (+{item.approved_score}đ)</Badge>}
                       {item.status === "rejected" && <Badge className="bg-red-600 text-white">Từ chối</Badge>}
                       {item.status === "revision_requested" && <Badge className="bg-amber-600 text-white">Cần bổ sung</Badge>}

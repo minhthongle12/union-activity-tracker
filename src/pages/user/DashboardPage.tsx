@@ -138,14 +138,14 @@ export default function UserDashboardPage() {
             Xin chào, {profile?.display_name || "Liên đội"}
           </h1>
           <p className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
-            <Building className="h-4 w-4 text-blue-600" />
+            <Building className="h-4 w-4 text-emerald-600" />
             Bảng điều khiển theo dõi tiến độ nộp minh chứng và kết quả đánh giá
           </p>
         </div>
 
         <Button
           onClick={() => navigate("/user/criteria")}
-          className="gap-2 bg-blue-600 hover:bg-blue-700 text-white shrink-0"
+          className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 shadow-md shadow-emerald-700/20 rounded-xl"
         >
           <ClipboardList className="h-4 w-4" />
           Vào nộp minh chứng
@@ -154,13 +154,13 @@ export default function UserDashboardPage() {
       </div>
 
       {/* Current Period Info */}
-      <Card className="border-blue-200 bg-gradient-to-r from-blue-50/70 to-indigo-50/50 shadow-2xs">
+      <Card className="border-emerald-200/80 bg-gradient-to-r from-emerald-50/80 via-[#f4faf5] to-lime-50/50 shadow-2xs rounded-2xl">
         <CardContent className="pt-6">
           <div className="flex items-start justify-between">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-blue-700" />
-                <span className="text-xs font-semibold text-blue-900 uppercase tracking-wider">
+                <Calendar className="h-4 w-4 text-emerald-700" />
+                <span className="text-xs font-semibold text-emerald-900 uppercase tracking-wider">
                   Đợt đánh giá hiện tại
                 </span>
               </div>
@@ -181,7 +181,7 @@ export default function UserDashboardPage() {
                 </span>
                 <span>
                   Hạn thẩm định:{" "}
-                  <b className="text-blue-700">
+                  <b className="text-emerald-700">
                     {period?.review_deadline
                       ? new Date(period.review_deadline).toLocaleDateString("vi-VN")
                       : "Theo thông báo"}
@@ -197,15 +197,15 @@ export default function UserDashboardPage() {
       </Card>
 
       {/* Progress */}
-      <Card className="border-slate-200 shadow-2xs">
+      <Card className="border-slate-200/80 shadow-2xs rounded-2xl">
         <CardHeader className="pb-2">
           <CardTitle className="text-base font-semibold flex items-center justify-between">
             <span>Tiến độ hoàn thành tiêu chí</span>
-            <span className="text-blue-700 font-bold">{progress}%</span>
+            <span className="text-emerald-700 font-bold">{progress}%</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Progress value={progress} className="h-2.5" />
+          <Progress value={progress} className="h-2.5 bg-emerald-100" />
           <p className="text-xs text-muted-foreground">
             Đơn vị đã nộp {submitted} trên tổng số {totalCriteria} tiêu chí được giao.
           </p>
@@ -214,10 +214,10 @@ export default function UserDashboardPage() {
 
       {/* Stat Grid */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <Card className="hover:border-slate-300 transition-colors">
+        <Card className="hover:border-emerald-200 transition-colors rounded-2xl">
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">
+              <div className="h-10 w-10 rounded-xl bg-emerald-100/80 flex items-center justify-center text-emerald-700">
                 <FileCheck className="h-5 w-5" />
               </div>
               <div>

@@ -72,11 +72,11 @@ export function UserLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
+    <div className="min-h-screen bg-[#f7faf7] flex flex-col md:flex-row">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-slate-900/50 md:hidden"
+          className="fixed inset-0 z-40 bg-emerald-950/60 backdrop-blur-xs md:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -84,27 +84,29 @@ export function UserLayout() {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-100 flex flex-col transition-transform duration-200 ease-in-out md:static md:translate-x-0 shadow-lg",
+          "fixed inset-y-0 left-0 z-50 w-64 bg-gradient-to-b from-[#0e351f] via-[#0a2918] to-[#071f12] text-emerald-100 flex flex-col transition-transform duration-200 ease-in-out md:static md:translate-x-0 shadow-xl border-r border-emerald-900/40",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         {/* Brand header */}
-        <div className="h-16 px-4 flex items-center justify-between border-b border-slate-800 bg-slate-950">
+        <div className="h-16 px-4 flex items-center justify-between border-b border-emerald-900/60 bg-[#072012]/80 backdrop-blur-sm">
           <div className="flex items-center gap-2.5">
-            <img
-              src="/huy-hieu-doi.png"
-              alt="Huy hiệu Đội"
-              className="h-8 w-8 object-contain shrink-0 drop-shadow"
-            />
+            <div className="h-10 w-10 rounded-xl bg-white/95 p-1 flex items-center justify-center shrink-0 shadow-sm ring-1 ring-emerald-500/30">
+              <img
+                src="/huy-hieu-doi.png"
+                alt="Huy hiệu Đội"
+                className="h-full w-full object-contain"
+              />
+            </div>
             <div className="flex flex-col">
-              <span className="font-semibold text-sm tracking-wide text-white leading-tight">
+              <span className="font-bold text-sm tracking-wide text-white leading-tight">
                 LIÊN ĐỘI
               </span>
-              <span className="text-[10px] text-slate-400">Đánh giá & Minh chứng</span>
+              <span className="text-[10px] text-emerald-300 font-medium">Đánh giá & Minh chứng</span>
             </div>
           </div>
           <button
-            className="md:hidden text-slate-400 hover:text-white"
+            className="md:hidden text-emerald-300 hover:text-white p-1 rounded-md"
             onClick={() => setSidebarOpen(false)}
           >
             <X className="h-5 w-5" />
@@ -112,8 +114,8 @@ export function UserLayout() {
         </div>
 
         {/* Navigation list */}
-        <div className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-          <div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+        <div className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
+          <div className="px-3 py-1 text-[11px] font-semibold text-emerald-400/90 uppercase tracking-wider">
             Menu Liên đội
           </div>
           {navItems.map((item) => {
@@ -126,14 +128,14 @@ export function UserLayout() {
                 onClick={() => setSidebarOpen(false)}
                 className={({ isActive }) =>
                   cn(
-                    "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
+                    "flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-xl transition-all duration-150",
                     isActive
-                      ? "bg-slate-800 text-white shadow-sm"
-                      : "text-slate-300 hover:bg-slate-800/60 hover:text-white"
+                      ? "bg-emerald-600 text-white shadow-md shadow-emerald-950/20 font-semibold ring-1 ring-emerald-400/30"
+                      : "text-emerald-100/80 hover:bg-emerald-900/40 hover:text-white"
                   )
                 }
               >
-                <Icon className="h-4 w-4 shrink-0 text-slate-400 group-hover:text-white" />
+                <Icon className="h-4 w-4 shrink-0 text-emerald-300" />
                 <span className="truncate">{item.label}</span>
               </NavLink>
             );
@@ -141,10 +143,10 @@ export function UserLayout() {
         </div>
 
         {/* Sidebar footer user badge */}
-        <div className="p-3 border-t border-slate-800 bg-slate-950/60">
+        <div className="p-3 border-t border-emerald-900/60 bg-[#072012]/60">
           <div className="flex items-center gap-2">
-            <Avatar className="h-8 w-8 border border-slate-700 bg-slate-800 text-white">
-              <AvatarFallback className="bg-blue-900 text-xs font-medium text-blue-200">
+            <Avatar className="h-8 w-8 border border-emerald-600/50 bg-emerald-800 text-white">
+              <AvatarFallback className="bg-emerald-700 text-xs font-semibold text-emerald-100">
                 {profile?.display_name ? profile.display_name.slice(0, 2).toUpperCase() : "LĐ"}
               </AvatarFallback>
             </Avatar>
@@ -152,7 +154,7 @@ export function UserLayout() {
               <p className="text-xs font-semibold text-white truncate">
                 {profile?.display_name || "Liên đội"}
               </p>
-              <Badge variant="outline" className="text-[10px] py-0 px-1 border-slate-700 text-blue-300">
+              <Badge variant="outline" className="text-[10px] py-0 px-1 border-emerald-700/60 text-emerald-300 bg-emerald-950/40">
                 <Building className="h-3 w-3 mr-0.5 inline" /> Đơn vị
               </Badge>
             </div>
@@ -160,7 +162,7 @@ export function UserLayout() {
               variant="ghost"
               size="icon"
               onClick={handleLogout}
-              className="text-slate-400 hover:text-red-400 hover:bg-slate-800 h-8 w-8"
+              className="text-emerald-300 hover:text-red-300 hover:bg-emerald-900/60 h-8 w-8 rounded-lg"
               title="Đăng xuất"
             >
               <LogOut className="h-4 w-4" />
@@ -172,12 +174,12 @@ export function UserLayout() {
       {/* Main content wrapper */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Navbar */}
-        <header className="h-16 bg-white border-b border-slate-200 px-4 md:px-6 flex items-center justify-between sticky top-0 z-30 shadow-xs">
+        <header className="h-16 bg-white/90 backdrop-blur-md border-b border-emerald-100 px-4 md:px-6 flex items-center justify-between sticky top-0 z-30 shadow-2xs">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
               size="icon"
-              className="md:hidden"
+              className="md:hidden text-emerald-900 hover:bg-emerald-50"
               onClick={() => setSidebarOpen(true)}
             >
               <Menu className="h-5 w-5" />
@@ -187,10 +189,10 @@ export function UserLayout() {
 
           <div className="flex items-center gap-3">
             <NavLink to="/user/notifications">
-              <Button variant="ghost" size="icon" className="relative text-slate-600 hover:text-slate-900">
+              <Button variant="ghost" size="icon" className="relative text-slate-700 hover:text-emerald-800 hover:bg-emerald-50 rounded-xl">
                 <Bell className="h-5 w-5" />
                 {(unreadCount ?? 0) > 0 && (
-                  <span className="absolute -top-1 -right-1 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white shadow-xs">
+                  <span className="absolute -top-1 -right-1 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white shadow-xs">
                     {unreadCount! > 99 ? "99+" : unreadCount}
                   </span>
                 )}
@@ -199,29 +201,29 @@ export function UserLayout() {
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="flex items-center gap-2 pl-2 pr-3 h-9">
-                  <Avatar className="h-7 w-7 bg-blue-700 text-white text-xs">
-                    <AvatarFallback className="bg-blue-700 text-white">
+                <Button variant="ghost" className="flex items-center gap-2 pl-2 pr-3 h-9 rounded-xl hover:bg-emerald-50 border border-emerald-100/60">
+                  <Avatar className="h-7 w-7 bg-emerald-600 text-white text-xs font-semibold">
+                    <AvatarFallback className="bg-emerald-600 text-white">
                       {profile?.display_name ? profile.display_name.slice(0, 2).toUpperCase() : "LĐ"}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="text-sm font-medium text-slate-700 hidden sm:inline">
+                  <span className="text-sm font-semibold text-slate-800 hidden sm:inline">
                     {profile?.display_name || "Liên đội"}
                   </span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
-                <DropdownMenuLabel>Tài khoản Đơn vị</DropdownMenuLabel>
+              <DropdownMenuContent align="end" className="w-52 rounded-xl border-emerald-100 shadow-lg">
+                <DropdownMenuLabel className="text-emerald-900 font-semibold">Tài khoản Đơn vị</DropdownMenuLabel>
                 <div className="px-2 py-1 text-xs text-muted-foreground">
                   @{profile?.username || "user"}
                 </div>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate("/user/account")}>
-                  <User className="h-4 w-4 mr-2" />
+                <DropdownMenuItem onClick={() => navigate("/user/account")} className="cursor-pointer">
+                  <User className="h-4 w-4 mr-2 text-emerald-600" />
                   Hồ sơ tài khoản
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="text-red-600">
+                <DropdownMenuItem onClick={handleLogout} className="text-red-600 cursor-pointer">
                   <LogOut className="h-4 w-4 mr-2" />
                   Đăng xuất
                 </DropdownMenuItem>
@@ -236,14 +238,14 @@ export function UserLayout() {
         </main>
 
         {/* Mobile Bottom Navigation Bar (PWA Style) */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 flex items-center justify-around px-2 py-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-lg">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-emerald-100 flex items-center justify-around px-2 py-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-lg">
           <NavLink
             to="/user"
             end
             className={({ isActive }) =>
               cn(
-                "flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-lg text-[10px] font-medium transition-colors",
-                isActive ? "text-blue-600 font-semibold" : "text-slate-500 hover:text-slate-900"
+                "flex flex-col items-center justify-center flex-1 py-1.5 px-1 rounded-xl text-[10px] font-medium transition-all",
+                isActive ? "text-emerald-700 bg-emerald-50 font-bold" : "text-slate-500 hover:text-emerald-800"
               )
             }
           >
@@ -255,8 +257,8 @@ export function UserLayout() {
             to="/user/criteria"
             className={({ isActive }) =>
               cn(
-                "flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-lg text-[10px] font-medium transition-colors",
-                isActive ? "text-blue-600 font-semibold" : "text-slate-500 hover:text-slate-900"
+                "flex flex-col items-center justify-center flex-1 py-1.5 px-1 rounded-xl text-[10px] font-medium transition-all",
+                isActive ? "text-emerald-700 bg-emerald-50 font-bold" : "text-slate-500 hover:text-emerald-800"
               )
             }
           >
@@ -268,8 +270,8 @@ export function UserLayout() {
             to="/user/bonus"
             className={({ isActive }) =>
               cn(
-                "flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-lg text-[10px] font-medium transition-colors",
-                isActive ? "text-blue-600 font-semibold" : "text-slate-500 hover:text-slate-900"
+                "flex flex-col items-center justify-center flex-1 py-1.5 px-1 rounded-xl text-[10px] font-medium transition-all",
+                isActive ? "text-emerald-700 bg-emerald-50 font-bold" : "text-slate-500 hover:text-emerald-800"
               )
             }
           >
@@ -281,8 +283,8 @@ export function UserLayout() {
             to="/user/results"
             className={({ isActive }) =>
               cn(
-                "flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-lg text-[10px] font-medium transition-colors",
-                isActive ? "text-blue-600 font-semibold" : "text-slate-500 hover:text-slate-900"
+                "flex flex-col items-center justify-center flex-1 py-1.5 px-1 rounded-xl text-[10px] font-medium transition-all",
+                isActive ? "text-emerald-700 bg-emerald-50 font-bold" : "text-slate-500 hover:text-emerald-800"
               )
             }
           >
@@ -294,15 +296,15 @@ export function UserLayout() {
             to="/user/notifications"
             className={({ isActive }) =>
               cn(
-                "flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-lg text-[10px] font-medium transition-colors relative",
-                isActive ? "text-blue-600 font-semibold" : "text-slate-500 hover:text-slate-900"
+                "flex flex-col items-center justify-center flex-1 py-1.5 px-1 rounded-xl text-[10px] font-medium transition-all relative",
+                isActive ? "text-emerald-700 bg-emerald-50 font-bold" : "text-slate-500 hover:text-emerald-800"
               )
             }
           >
             <div className="relative">
               <Bell className="h-5 w-5 mb-0.5" />
               {(unreadCount ?? 0) > 0 && (
-                <span className="absolute -top-1 -right-2 flex h-3.5 min-w-3.5 px-0.5 items-center justify-center rounded-full bg-blue-600 text-[9px] font-bold text-white">
+                <span className="absolute -top-1 -right-2 flex h-3.5 min-w-3.5 px-0.5 items-center justify-center rounded-full bg-emerald-600 text-[9px] font-bold text-white shadow-2xs">
                   {unreadCount! > 99 ? "99+" : unreadCount}
                 </span>
               )}

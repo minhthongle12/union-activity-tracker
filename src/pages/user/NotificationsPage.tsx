@@ -159,11 +159,11 @@ export default function NotificationsPage() {
       </div>
 
       {/* Web Push Configuration Card */}
-      <Card className="bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-slate-50 border-blue-200/90 shadow-2xs">
+      <Card className="bg-gradient-to-r from-emerald-50/90 via-[#f4faf5] to-lime-50/50 border-emerald-200/80 shadow-2xs rounded-2xl">
         <CardContent className="p-4 sm:p-5 space-y-3.5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-start sm:items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shrink-0 shadow-xs">
+              <div className="h-10 w-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white shrink-0 shadow-xs">
                 <Sparkles className="h-5 w-5" />
               </div>
               <div>
@@ -171,7 +171,7 @@ export default function NotificationsPage() {
                   <h4 className="font-semibold text-sm sm:text-base text-slate-900">
                     Thông báo đẩy trên trình duyệt (Web Push Notification)
                   </h4>
-                  <Badge variant="outline" className="text-[10px] font-mono bg-blue-100/70 text-blue-800 border-blue-300">
+                  <Badge variant="outline" className="text-[10px] font-mono bg-emerald-100/80 text-emerald-800 border-emerald-300">
                     VAPID RFC 8292
                   </Badge>
                 </div>
@@ -199,7 +199,7 @@ export default function NotificationsPage() {
                   variant="outline"
                   onClick={handleSendTestPush}
                   disabled={isTesting}
-                  className="text-xs h-8 gap-1.5 bg-white border-blue-300 text-blue-700 hover:bg-blue-50"
+                  className="text-xs h-8 gap-1.5 bg-white border-emerald-300 text-emerald-700 hover:bg-emerald-50 rounded-xl"
                 >
                   {isTesting ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -267,10 +267,10 @@ export default function NotificationsPage() {
                 <div
                   key={item.id}
                   className={`p-4 flex items-start gap-3 transition-colors ${
-                    !item.is_read ? "bg-blue-50/40" : "hover:bg-slate-50"
+                    !item.is_read ? "bg-emerald-50/50" : "hover:bg-slate-50"
                   }`}
                 >
-                  <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 shrink-0 mt-0.5">
+                  <div className="h-8 w-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0 mt-0.5">
                     <Bell className="h-4 w-4" />
                   </div>
                   <div className="flex-1 min-w-0">

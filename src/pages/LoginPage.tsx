@@ -44,11 +44,15 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 px-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-[#f4f9f5] to-lime-50/60 px-4 relative overflow-hidden">
+      {/* Decorative background glow */}
+      <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-emerald-200/40 blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-lime-200/40 blur-3xl pointer-events-none" />
+
+      <div className="w-full max-w-md relative z-10">
         {/* Logo / Brand */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center h-20 w-20 rounded-full bg-white shadow-md p-1.5 mb-4 border border-slate-200">
+          <div className="inline-flex items-center justify-center h-22 w-22 rounded-2xl bg-white shadow-xl shadow-emerald-900/10 p-2 mb-4 border border-emerald-100 ring-4 ring-emerald-50">
             <img
               src="/huy-hieu-doi.png"
               alt="Huy hiệu Đội TNTP Hồ Chí Minh"
@@ -58,23 +62,23 @@ export default function LoginPage() {
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             Hệ thống Quản lý Công tác Đội
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-slate-600 mt-1">
             Quản lý tiêu chí & minh chứng đánh giá
           </p>
         </div>
 
         {/* Login Card */}
-        <Card className="shadow-xl border-slate-200/80">
+        <Card className="shadow-xl shadow-emerald-950/5 border-emerald-100/90 rounded-2xl bg-white/95 backdrop-blur-sm">
           <CardHeader className="space-y-1 pb-4">
-            <CardTitle className="text-xl">Đăng nhập</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-xl text-slate-900">Đăng nhập</CardTitle>
+            <CardDescription className="text-slate-500">
               Nhập thông tin tài khoản để truy cập hệ thống
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="username">Tên đăng nhập</Label>
+                <Label htmlFor="username" className="text-slate-700">Tên đăng nhập</Label>
                 <Input
                   id="username"
                   type="text"
@@ -84,11 +88,12 @@ export default function LoginPage() {
                   autoComplete="username"
                   autoFocus
                   disabled={loading}
+                  className="rounded-xl border-emerald-100 focus-visible:ring-emerald-500"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password">Mật khẩu</Label>
+                <Label htmlFor="password" className="text-slate-700">Mật khẩu</Label>
                 <div className="relative">
                   <Input
                     id="password"
@@ -98,7 +103,7 @@ export default function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     autoComplete="current-password"
                     disabled={loading}
-                    className="pr-10"
+                    className="pr-10 rounded-xl border-emerald-100 focus-visible:ring-emerald-500"
                   />
                   <button
                     type="button"
@@ -112,12 +117,16 @@ export default function LoginPage() {
               </div>
 
               {error && (
-                <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
                   {error}
                 </div>
               )}
 
-              <Button type="submit" className="w-full h-11" disabled={loading}>
+              <Button
+                type="submit"
+                className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-md shadow-emerald-700/20 transition-all"
+                disabled={loading}
+              >
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />

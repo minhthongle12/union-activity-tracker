@@ -686,7 +686,7 @@ export default function ReviewPage() {
                       {/* Left: Name, Description & Timelines */}
                       <div className="space-y-1.5 flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-semibold text-slate-900 group-hover:text-blue-700 transition-colors text-base line-clamp-1">
+                          <h3 className="font-semibold text-slate-900 group-hover:text-emerald-700 transition-colors text-base line-clamp-1">
                             {p.name}
                           </h3>
                           {renderPeriodStatusBadge(p.status)}
@@ -708,8 +708,8 @@ export default function ReviewPage() {
                             Hạn nộp MC: <strong className="text-amber-800 font-medium">{formatDateDisplay(p.submission_deadline)}</strong>
                           </span>
                           <span className="flex items-center gap-1">
-                            <CheckCircle2 className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                            Hạn thẩm định: <strong className="text-blue-800 font-medium">{formatDateDisplay(p.review_deadline)}</strong>
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                            Hạn thẩm định: <strong className="text-emerald-800 font-medium">{formatDateDisplay(p.review_deadline)}</strong>
                           </span>
                           <span className="text-slate-300 hidden sm:inline">|</span>
                           <span className="flex items-center gap-1 font-medium text-slate-600">
@@ -886,8 +886,8 @@ export default function ReviewPage() {
       {/* Criteria List for Admin Review */}
       <div className="space-y-4">
         {queueLoading ? (
-          <div className="p-12 text-center text-sm text-muted-foreground space-y-2 bg-white rounded-lg border">
-            <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-600" />
+          <div className="p-12 text-center text-sm text-muted-foreground space-y-2 bg-white rounded-2xl border border-emerald-100">
+            <Loader2 className="h-6 w-6 animate-spin mx-auto text-emerald-600" />
             <p>Đang tải danh sách tiêu chí và minh chứng của các đơn vị...</p>
           </div>
         ) : filteredCriteria.length === 0 ? (
@@ -1005,7 +1005,7 @@ function AdminCriterionCard({
 
           <div className="flex items-center gap-1.5 flex-wrap">
             {waitingUnits > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-lime-100 text-lime-900 border border-lime-200">
                 {waitingUnits} chờ thẩm định
               </span>
             )}
@@ -1092,8 +1092,8 @@ function AdminCriterionCard({
                   <div
                     key={unit.organization.id}
                     className={cn(
-                      "rounded-lg border bg-white transition-all overflow-hidden",
-                      isOrgExpanded ? "border-blue-400 ring-1 ring-blue-100 shadow-sm" : "border-slate-200 hover:border-slate-300"
+                      "rounded-xl border bg-white transition-all overflow-hidden",
+                      isOrgExpanded ? "border-emerald-500 ring-2 ring-emerald-100 shadow-sm" : "border-slate-200 hover:border-emerald-200"
                     )}
                   >
                     {/* Unit Row Header */}
@@ -1101,10 +1101,10 @@ function AdminCriterionCard({
                       onClick={() =>
                         setExpandedOrgId(isOrgExpanded ? null : unit.organization.id)
                       }
-                      className="p-3.5 sm:px-4 cursor-pointer select-none flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white hover:bg-slate-50/60"
+                      className="p-3.5 sm:px-4 cursor-pointer select-none flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white hover:bg-emerald-50/40"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <Building2 className="h-4 w-4 text-blue-600 shrink-0" />
+                        <Building2 className="h-4 w-4 text-emerald-600 shrink-0" />
                         <div>
                           <div className="font-semibold text-xs sm:text-sm text-slate-900">
                             {unit.organization.name}
@@ -1122,7 +1122,7 @@ function AdminCriterionCard({
                             Đã thẩm định: {adminScore ?? selfScore}đ
                           </span>
                         ) : status === "submitted" ? (
-                          <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-100 text-blue-800">
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-lime-100 text-lime-900 border border-lime-200">
                             Đã nộp (Chờ thẩm định)
                           </span>
                         ) : status === "revision_requested" ? (
@@ -1276,7 +1276,7 @@ function AdminUnitGradingDetail({
           <span className="font-bold text-slate-900 text-sm sm:text-base">
             Thẩm định & Cho điểm
           </span>
-          <span className="text-xs font-semibold text-blue-700">
+          <span className="text-xs font-semibold text-emerald-700">
             {unit.organization.name}
           </span>
         </div>
@@ -1292,7 +1292,7 @@ function AdminUnitGradingDetail({
 
           <div className="grid grid-cols-12 gap-2">
             <div className="col-span-5 font-bold text-slate-700">Điểm tự chấm:</div>
-            <div className="col-span-7 font-semibold text-blue-800">
+            <div className="col-span-7 font-semibold text-emerald-800">
               {selfScore} / {maxScore} điểm
             </div>
           </div>
@@ -1303,7 +1303,7 @@ function AdminUnitGradingDetail({
               {status === "verified" ? (
                 <span className="text-emerald-700 font-bold">Đã xác thực ({unit.submission?.admin_score}đ)</span>
               ) : status === "submitted" ? (
-                <span className="text-blue-700 font-semibold">Đã nộp • Chờ xác thực</span>
+                <span className="text-lime-800 font-semibold bg-lime-50 px-2 py-0.5 rounded-md border border-lime-200">Đã nộp • Chờ xác thực</span>
               ) : status === "revision_requested" ? (
                 <span className="text-amber-700 font-semibold">Yêu cầu bổ sung</span>
               ) : (
@@ -1314,9 +1314,9 @@ function AdminUnitGradingDetail({
         </div>
 
         {/* Admin Final Grading Form */}
-        <div className="pt-3 border-t border-slate-200 space-y-3 bg-slate-50/70 p-3.5 rounded-lg">
+        <div className="pt-3 border-t border-slate-200 space-y-3 bg-emerald-50/40 border-emerald-100 p-3.5 rounded-xl">
           <div className="flex items-center gap-1.5 font-bold text-slate-800 text-xs uppercase tracking-wide">
-            <ShieldCheck className="h-4 w-4 text-blue-700" />
+            <ShieldCheck className="h-4 w-4 text-emerald-700" />
             Điểm thẩm định cuối cùng
           </div>
 

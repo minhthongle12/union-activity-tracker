@@ -210,9 +210,9 @@ export default function UserResultsPage() {
               </span>
             </div>
 
-            <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
-              <span className="text-xs text-blue-800 font-medium block">Điểm thưởng</span>
-              <span className="text-2xl font-bold text-blue-700 block mt-0.5">
+            <div className="p-3 rounded-xl bg-lime-50/70 border border-lime-200/80">
+              <span className="text-xs text-lime-900 font-medium block">Điểm thưởng</span>
+              <span className="text-2xl font-bold text-emerald-700 block mt-0.5">
                 +{approvedBonusScore} <span className="text-xs font-normal">điểm</span>
               </span>
             </div>
@@ -289,7 +289,7 @@ export default function UserResultsPage() {
                           {isVerified ? (
                             <Badge className="bg-emerald-600 text-white text-[10px]">Đã xác thực</Badge>
                           ) : sub?.status === "submitted" ? (
-                            <Badge className="bg-blue-600 text-white text-[10px]">Đã nộp</Badge>
+                            <Badge className="bg-teal-600 text-white text-[10px]">Đã nộp</Badge>
                           ) : sub?.status === "revision_requested" ? (
                             <Badge className="bg-amber-600 text-white text-[10px]">Cần bổ sung</Badge>
                           ) : (

@@ -347,9 +347,9 @@ export default function UserBonusPage() {
       case "draft":
         return <Badge variant="outline" className="bg-slate-50 text-slate-600">Bản nháp</Badge>;
       case "submitted":
-        return <Badge className="bg-blue-600 text-white gap-1"><Clock className="h-3 w-3" /> Đã gửi chờ duyệt</Badge>;
+        return <Badge className="bg-emerald-600 text-white gap-1"><Clock className="h-3 w-3" /> Đã gửi chờ duyệt</Badge>;
       case "approved":
-        return <Badge className="bg-emerald-600 text-white gap-1"><CheckCircle2 className="h-3 w-3" /> Đã cộng điểm</Badge>;
+        return <Badge className="bg-teal-600 text-white gap-1"><CheckCircle2 className="h-3 w-3" /> Đã cộng điểm</Badge>;
       case "rejected":
         return <Badge className="bg-red-600 text-white gap-1"><XCircle className="h-3 w-3" /> Không duyệt</Badge>;
       case "revision_requested":
@@ -381,7 +381,7 @@ export default function UserBonusPage() {
             Đề xuất điểm thưởng cho các thành tích nổi bật, công trình, phần việc sáng tạo của đơn vị
           </p>
         </div>
-        <Button onClick={handleOpenCreateDialog} className="gap-2 shrink-0 bg-blue-600 hover:bg-blue-700">
+        <Button onClick={handleOpenCreateDialog} className="gap-2 shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-md shadow-emerald-700/20">
           <Plus className="h-4 w-4" />
           Đề xuất điểm cộng
         </Button>
@@ -389,7 +389,7 @@ export default function UserBonusPage() {
 
       {/* Overview Card */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="border-slate-200">
+        <Card className="border-slate-200/80 rounded-2xl">
           <CardContent className="pt-6">
             <span className="text-xs text-muted-foreground block">Tổng yêu cầu đã đề xuất</span>
             <span className="text-2xl font-bold text-slate-900 mt-1 block">
@@ -398,7 +398,7 @@ export default function UserBonusPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-emerald-200 bg-emerald-50/40">
+        <Card className="border-emerald-200/80 bg-emerald-50/50 rounded-2xl">
           <CardContent className="pt-6">
             <span className="text-xs text-emerald-800 block font-semibold">Điểm cộng đã được phê duyệt</span>
             <span className="text-2xl font-bold text-emerald-700 mt-1 block">
@@ -407,10 +407,10 @@ export default function UserBonusPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-blue-200 bg-blue-50/40">
+        <Card className="border-lime-200/80 bg-lime-50/40 rounded-2xl">
           <CardContent className="pt-6">
-            <span className="text-xs text-blue-800 block font-semibold">Đang chờ xét duyệt</span>
-            <span className="text-2xl font-bold text-blue-700 mt-1 block">
+            <span className="text-xs text-lime-900 block font-semibold">Đang chờ xét duyệt</span>
+            <span className="text-2xl font-bold text-emerald-700 mt-1 block">
               {(filteredBonusRequests ?? []).filter((b) => b.status === "submitted").length}
             </span>
           </CardContent>
@@ -418,10 +418,10 @@ export default function UserBonusPage() {
       </div>
 
       {/* Requests List */}
-      <Card className="border-slate-200 shadow-2xs">
+      <Card className="border-slate-200/80 shadow-2xs rounded-2xl">
         <CardHeader className="p-4 sm:p-5 pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <Award className="h-4 w-4 text-blue-600" />
+            <Award className="h-4 w-4 text-emerald-600" />
             Danh sách đề xuất điểm cộng
           </CardTitle>
           <div className="w-full sm:w-auto flex items-center gap-2">
@@ -462,7 +462,7 @@ export default function UserBonusPage() {
                       <h4 className="font-semibold text-slate-900 text-sm sm:text-base break-words">{item.title}</h4>
                       {getStatusBadge(item.status)}
                       {item.organization_period?.period?.name && (
-                        <Badge variant="outline" className="text-xs gap-1 bg-blue-50 text-blue-700 border-blue-200 max-w-full truncate">
+                        <Badge variant="outline" className="text-xs gap-1 bg-emerald-50 text-emerald-800 border-emerald-200 max-w-full truncate">
                           <Calendar className="h-3 w-3 shrink-0" />
                           <span className="truncate">{item.organization_period.period.name}</span>
                         </Badge>
@@ -489,7 +489,7 @@ export default function UserBonusPage() {
                             href={ev.external_url || "#"}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-xs text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 max-w-full truncate"
+                            className="text-xs text-emerald-700 hover:text-emerald-900 hover:underline flex items-center gap-1 bg-emerald-50/50 px-2 py-0.5 rounded-lg border border-emerald-200/80 max-w-full truncate"
                           >
                             <ExternalLink className="h-3 w-3 shrink-0" />
                             <span className="truncate">{ev.file_name || "Xem liên kết"}</span>
@@ -634,7 +634,7 @@ export default function UserBonusPage() {
             </Button>
             <Button
               type="button"
-              className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto text-xs sm:text-sm h-9 sm:h-10 font-medium"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto text-xs sm:text-sm h-9 sm:h-10 font-semibold rounded-xl shadow-md shadow-emerald-700/20"
               onClick={() => {
                 if (!form.organization_period_id) {
                   toast.error("Vui lòng chọn đợt đánh giá áp dụng đề xuất điểm cộng.");

@@ -159,17 +159,17 @@ export default function AdminNotificationsPage() {
           </p>
         </div>
 
-        <Button onClick={() => setBroadcastDialogOpen(true)} className="gap-2 shrink-0 bg-blue-600 hover:bg-blue-700">
+        <Button onClick={() => setBroadcastDialogOpen(true)} className="gap-2 shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-md shadow-emerald-700/20 font-semibold">
           <Plus className="h-4 w-4" />
           Gửi thông báo mới
         </Button>
       </div>
 
       {/* VAPID & Web Push Status Overview */}
-      <Card className="bg-gradient-to-r from-blue-50/90 via-indigo-50/60 to-slate-50 border-blue-200 shadow-2xs">
+      <Card className="bg-gradient-to-r from-emerald-50/90 via-[#f4faf5] to-lime-50/50 border-emerald-200/80 shadow-2xs rounded-2xl">
         <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shrink-0 shadow-xs">
+            <div className="h-10 w-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white shrink-0 shadow-xs">
               <Radio className="h-5 w-5" />
             </div>
             <div>
@@ -177,7 +177,7 @@ export default function AdminNotificationsPage() {
                 <h4 className="font-semibold text-sm sm:text-base text-slate-900">
                   Hệ thống thông báo đẩy Web Push (VAPID RFC 8292)
                 </h4>
-                <Badge variant="outline" className="text-[10px] font-mono bg-blue-100/70 text-blue-800 border-blue-300">
+                <Badge variant="outline" className="text-[10px] font-mono bg-emerald-100/80 text-emerald-800 border-emerald-300">
                   Vercel Serverless API
                 </Badge>
               </div>
@@ -304,7 +304,7 @@ export default function AdminNotificationsPage() {
               Hủy
             </Button>
             <Button
-              className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 font-semibold rounded-xl shadow-md shadow-emerald-700/20"
               onClick={() => {
                 if (!form.title.trim() || !form.message.trim()) {
                   toast.error("Vui lòng nhập đầy đủ tiêu đề và nội dung.");

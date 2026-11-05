@@ -97,16 +97,16 @@ export default function UserAccountPage() {
       <Card className="border-slate-200">
         <CardContent className="pt-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <Avatar className="h-16 w-16 bg-blue-600 text-white text-lg font-bold">
-              <AvatarFallback className="bg-blue-700 text-white">
+            <Avatar className="h-16 w-16 bg-emerald-600 text-white text-lg font-bold ring-4 ring-emerald-50 shadow-sm">
+              <AvatarFallback className="bg-emerald-700 text-white font-bold">
                 {profile?.display_name ? profile.display_name.slice(0, 2).toUpperCase() : "LĐ"}
               </AvatarFallback>
             </Avatar>
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-bold text-slate-900">{profile?.display_name}</h3>
-                <Badge variant="outline" className="text-blue-700 border-blue-200 bg-blue-50">
-                  <Building className="h-3 w-3 mr-1" />
+                <Badge variant="outline" className="text-emerald-700 border-emerald-200 bg-emerald-50">
+                  <Building className="h-3 w-3 mr-1 text-emerald-600" />
                   Liên đội
                 </Badge>
               </div>
@@ -198,7 +198,7 @@ export default function UserAccountPage() {
       </div>
 
       {/* PWA App Information Card */}
-      <Card className="border-slate-200 bg-gradient-to-br from-slate-900 to-slate-800 text-white shadow-md">
+      <Card className="border-emerald-800/60 bg-gradient-to-br from-[#0d341f] via-[#092817] to-[#061d10] text-white shadow-lg shadow-emerald-950/10 rounded-2xl">
         <CardContent className="pt-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
