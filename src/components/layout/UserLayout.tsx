@@ -100,9 +100,9 @@ export function UserLayout() {
             </div>
             <div className="flex flex-col">
               <span className="font-bold text-sm tracking-wide text-white leading-tight">
-                LIÊN ĐỘI
+                HỘI ĐỒNG ĐỘI
               </span>
-              <span className="text-[10px] text-emerald-300 font-medium">Đánh giá & Minh chứng</span>
+              <span className="text-[10px] text-emerald-300 font-medium">Xã Bến Lức • Liên đội</span>
             </div>
           </div>
           <button

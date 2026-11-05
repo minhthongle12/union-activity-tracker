@@ -140,7 +140,7 @@ export async function exportReviewExcel({
 
     // ROW 1: Header Org & Date
     const r1 = sheet.addRow([
-      "ĐỘI TNTP HỒ CHÍ MINH\nHỘI ĐỒNG ĐỘI XÃ BẾN LỨC\n***",
+      "HỘI ĐỒNG ĐỘI XÃ BẾN LỨC\n***",
       "",
       "",
       "Bến Lức, ngày       tháng      năm 2026",

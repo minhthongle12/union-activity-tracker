@@ -58,11 +58,11 @@ export default function LoginPage() {
               className="h-full w-full object-contain max-h-12 max-w-12 sm:max-h-16 sm:max-w-16"
             />
           </div>
-          <h1 className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight">
-            Hệ thống Quản lý Công tác Đội
+          <h1 className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight uppercase">
+            Hội đồng Đội xã Bến Lức
           </h1>
           <p className="text-xs sm:text-sm text-slate-600 font-medium mt-1">
-            Quản lý tiêu chí & minh chứng đánh giá
+            Hệ thống Quản lý Công tác Đội & Đánh giá thi đua
           </p>
         </div>
 

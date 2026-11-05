@@ -321,7 +321,7 @@ export default function ReportsPage() {
       {/* Print-only official header */}
       <div className="hidden print:block text-center space-y-1 mb-6">
         <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">
-          ĐỘI TNTP HỒ CHÍ MINH
+          HỘI ĐỒNG ĐỘI XÃ BẾN LỨC
         </p>
         <h2 className="text-lg font-bold text-slate-900 uppercase">
           BẢNG TỔNG HỢP KẾT QUẢ XẾP HẠNG THI ĐUA CÔNG TÁC ĐỘI
@@ -430,7 +430,8 @@ export default function ReportsPage() {
           <p className="italic text-slate-500 mt-1">(Ký và ghi rõ họ tên)</p>
         </div>
         <div>
-          <p className="font-bold uppercase">TM. BAN THƯỜNG VỤ ĐOÀN CẤP TRÊN</p>
+          <p className="font-bold uppercase">TM. HỘI ĐỒNG ĐỘI XÃ BẾN LỨC</p>
+          <p className="text-xs font-semibold text-slate-700">CHỦ TỊCH</p>
           <p className="italic text-slate-500 mt-1">(Ký tên và đóng dấu)</p>
         </div>
       </div>

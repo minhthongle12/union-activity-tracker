@@ -23,7 +23,7 @@ import { toast } from "sonner";
 
 export default function SettingsPage() {
   const { profile } = useAuth();
-  const [authorityName, setAuthorityName] = useState("BAN THƯỜNG VỤ ĐOÀN KHỐI");
+  const [authorityName, setAuthorityName] = useState("HỘI ĐỒNG ĐỘI XÃ BẾN LỨC");
   const [maxFileSize, setMaxFileSize] = useState(15);
   const [allowPublicRanking, setAllowPublicRanking] = useState(false);
   const [autoNotifyReview, setAutoNotifyReview] = useState(true);
@@ -33,7 +33,11 @@ export default function SettingsPage() {
     const savedAuthority = localStorage.getItem("setting_authority_name");
     const savedMaxFileSize = localStorage.getItem("setting_max_file_size");
     const savedAutoNotify = localStorage.getItem("setting_auto_notify");
-    if (savedAuthority) setAuthorityName(savedAuthority);
+    if (savedAuthority && !savedAuthority.includes("ĐOÀN KHỐI")) {
+      setAuthorityName(savedAuthority);
+    } else {
+      setAuthorityName("HỘI ĐỒNG ĐỘI XÃ BẾN LỨC");
+    }
     if (savedMaxFileSize) setMaxFileSize(parseInt(savedMaxFileSize) || 15);
     if (savedAutoNotify) setAutoNotifyReview(savedAutoNotify === "true");
   }, []);

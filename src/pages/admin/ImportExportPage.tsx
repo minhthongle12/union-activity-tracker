@@ -51,7 +51,7 @@ interface ImportRow {
 }
 
 /**
- * 6 Nhóm tiêu chí chuẩn theo Khung Tiêu chí Đội TNTP Hồ Chí Minh (100 điểm)
+ * 6 Nhóm tiêu chí chuẩn Hội đồng Đội xã Bến Lức (100 điểm)
  */
 export const STANDARD_DOI_CATEGORIES = [
   { code: "CAT_01", name: "Thực hiện chỉ tiêu năm học (16đ)", sort_order: 1 },
@@ -172,7 +172,6 @@ export default function ImportExportPage() {
     const sheet = workbook.addWorksheet("Khung_Tieu_Chi_Doi");
 
     // Title rows
-    sheet.addRow(["ĐỘI TNTP HỒ CHÍ MINH"]);
     sheet.addRow(["HỘI ĐỒNG ĐỘI XÃ BẾN LỨC"]);
     sheet.addRow(["KHUNG TIÊU CHÍ ĐÁNH GIÁ, XẾP LOẠI DANH HIỆU 'LIÊN ĐỘI MẠNH'"]);
     sheet.addRow(["* KHUNG ĐIỂM (100 điểm)"]);
@@ -321,7 +320,7 @@ export default function ImportExportPage() {
     a.download = "Mau_Khung_Tieu_Chi_Cong_Tac_Doi.xlsx";
     a.click();
     URL.revokeObjectURL(url);
-    toast.success("Đã tải xuống Mẫu Khung Tiêu Chí Công tác Đội!");
+    toast.success("Đã tải xuống Mẫu Khung Tiêu Chí Đội xã Bến Lức!");
   };
 
   // ============================================================
@@ -1031,7 +1030,7 @@ export default function ImportExportPage() {
                   onClick={downloadDoiFrameworkTemplate}
                 >
                   <FileSpreadsheet className="h-4 w-4 text-emerald-700 shrink-0" />
-                  <span className="truncate">Mẫu Khung Tiêu chí Đội (Chuẩn)</span>
+                  <span className="truncate">Mẫu Khung Tiêu chí Đội xã Bến Lức</span>
                 </Button>
 
                 <Button
