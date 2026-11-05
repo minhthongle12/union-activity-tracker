@@ -42,6 +42,45 @@ interface ImportRow {
   errors: string[];
 }
 
+/**
+ * Robustly extract text from an ExcelJS cell value
+ * Handles string, number, boolean, Date, RichText, Formulas, and Hyperlinks
+ */
+function extractCellText(cellValue: any): string {
+  if (cellValue === null || cellValue === undefined) return "";
+  if (typeof cellValue === "string") return cellValue.trim();
+  if (typeof cellValue === "number" || typeof cellValue === "boolean") return String(cellValue).trim();
+  if (cellValue instanceof Date) return cellValue.toISOString();
+
+  if (typeof cellValue === "object") {
+    // 1. Rich Text: { richText: [{ text: "..." }, ...] }
+    if (Array.isArray(cellValue.richText)) {
+      return cellValue.richText
+        .map((part: any) => (part && typeof part.text === "string" ? part.text : ""))
+        .join("")
+        .trim();
+    }
+    // 2. Formula with result: { formula: string, result: any }
+    if ("result" in cellValue) {
+      return extractCellText(cellValue.result);
+    }
+    // 3. Hyperlink: { text: string, hyperlink: string }
+    if ("text" in cellValue && typeof cellValue.text === "string") {
+      return cellValue.text.trim();
+    }
+    if ("hyperlink" in cellValue && typeof cellValue.hyperlink === "string") {
+      return cellValue.hyperlink.trim();
+    }
+    // 4. Fallback if toString is not [object Object]
+    const str = String(cellValue);
+    if (str !== "[object Object]") {
+      return str.trim();
+    }
+  }
+
+  return "";
+}
+
 export default function ImportExportPage() {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
@@ -338,7 +377,7 @@ export default function ImportExportPage() {
         let hasCategoryOrTT = false;
 
         row.eachCell((cell, colNumber) => {
-          const val = String(cell.value || "").trim().toLowerCase();
+          const val = extractCellText(cell.value).toLowerCase();
           if (val === "criterion_code" || val === "criterion_title") {
             // Technical format
             headerRowIndex = r;
@@ -395,10 +434,13 @@ export default function ImportExportPage() {
 
           const getCellVal = (col: number) => {
             if (col <= 0) return "";
-            const val = row.getCell(col).value;
-            if (val === null || val === undefined) return "";
-            if (typeof val === "object" && "result" in val) return String(val.result || "");
-            return String(val).trim();
+            const cell = row.getCell(col);
+            const text = extractCellText(cell.value);
+            if (text) return text;
+            if (cell.text && typeof cell.text === "string" && cell.text !== "[object Object]") {
+              return cell.text.trim();
+            }
+            return "";
           };
 
           const rawCategory = getCellVal(colCategory);
@@ -411,10 +453,13 @@ export default function ImportExportPage() {
           if (
             fullRowText.includes("điểm thưởng") ||
             fullRowText.includes("** điểm thưởng") ||
-            rawCategory.includes("ĐIỂM THƯỞNG")
+            rawCategory.toUpperCase().includes("ĐIỂM THƯỞNG")
           ) {
             inBonusSection = true;
-            return;
+            // Skip the section heading row if it has no specific bonus content
+            if (!rawTitle || rawTitle.toLowerCase().includes("điểm thưởng")) {
+              return;
+            }
           }
 
           // Check for summary or note rows to skip
@@ -432,8 +477,12 @@ export default function ImportExportPage() {
 
           // Carry forward merged category
           if (rawCategory && !inBonusSection) {
-            // Strip any numeric prefix like "1. ", "2. "
-            currentCategoryName = rawCategory.replace(/^\d+\.\s*/, "").trim();
+            // Strip any numeric prefix like "1. ", "2. " and normalize line breaks
+            currentCategoryName = rawCategory
+              .replace(/^\d+\.\s*/, "")
+              .replace(/\r?\n+/g, " ")
+              .replace(/\s+/g, " ")
+              .trim();
             categoryCount++;
           }
 
@@ -499,6 +548,11 @@ export default function ImportExportPage() {
           } else {
             // In Bonus section: extract bonus items
             if (rawTitle && rawTitle.length > 5) {
+              // Skip section header rows like "** ĐIỂM THƯỞNG (5 điểm)"
+              if (rawTitle.toLowerCase().includes("điểm thưởng") && rawTitle.length < 35) {
+                return;
+              }
+
               let bonusCode = "BONUS_OTHER";
               if (rawTitle.toLowerCase().includes("mô hình") || rawTitle.toLowerCase().includes("sáng tạo")) {
                 bonusCode = "MO_HINH";
@@ -539,10 +593,13 @@ export default function ImportExportPage() {
           if (rowNumber <= headerRowIndex) return;
 
           const getCellVal = (colIndex: number) => {
-            const val = row.getCell(colIndex).value;
-            if (val === null || val === undefined) return "";
-            if (typeof val === "object" && "result" in val) return String(val.result || "");
-            return String(val).trim();
+            const cell = row.getCell(colIndex);
+            const text = extractCellText(cell.value);
+            if (text) return text;
+            if (cell.text && typeof cell.text === "string" && cell.text !== "[object Object]") {
+              return cell.text.trim();
+            }
+            return "";
           };
 
           const categoryCode = getCellVal(1);
@@ -932,13 +989,13 @@ export default function ImportExportPage() {
                           <TableCell className="text-xs font-bold text-slate-800">
                             {row.categoryName}
                           </TableCell>
-                          <TableCell className="text-xs font-medium text-slate-950 max-w-md">
+                          <TableCell className="text-xs font-medium text-slate-950 max-w-md whitespace-pre-line leading-relaxed">
                             {row.criterionTitle}
                           </TableCell>
-                          <TableCell className="text-center font-bold text-xs text-slate-950">
+                          <TableCell className="text-center font-bold text-xs text-slate-950 whitespace-nowrap">
                             {row.maxScore}đ
                           </TableCell>
-                          <TableCell className="text-xs text-slate-600 max-w-xs truncate" title={row.scoringGuidelines}>
+                          <TableCell className="text-xs text-slate-700 max-w-xs whitespace-pre-line leading-relaxed" title={row.scoringGuidelines}>
                             {row.scoringGuidelines || "—"}
                           </TableCell>
                           <TableCell>

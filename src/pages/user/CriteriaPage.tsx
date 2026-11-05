@@ -559,7 +559,7 @@ export default function UserCriteriaPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tất cả trạng thái</SelectItem>
-              <SelectItem value="active">Đang mở nộp bài</SelectItem>
+              <SelectItem value="active">Đang mở nộp</SelectItem>
               <SelectItem value="closed">Đang thẩm định (Đã đóng nộp)</SelectItem>
               <SelectItem value="archived">Đã kết thúc / Khóa</SelectItem>
               <SelectItem value="draft">Dự thảo</SelectItem>
@@ -610,7 +610,7 @@ export default function UserCriteriaPage() {
                       )}
                     >
                       {p.status === "active"
-                        ? "Đang mở nộp bài"
+                        ? "Đang mở nộp"
                         : p.status === "closed"
                         ? "Đang thẩm định"
                         : p.status === "archived"
@@ -646,7 +646,7 @@ export default function UserCriteriaPage() {
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-slate-500 flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5 text-amber-600" /> Hạn nộp bài:
+                        <Clock className="h-3.5 w-3.5 text-amber-600" /> Hạn nộp:
                       </span>
                       <span className="font-semibold text-slate-900">
                         {formatDateDisplay(p.submission_deadline)}
@@ -727,7 +727,7 @@ export default function UserCriteriaPage() {
                 : "bg-slate-200 text-slate-700"
             )}
           >
-            {selectedPeriod.status === "active" ? "Đang mở nộp bài" : selectedPeriod.status}
+            {selectedPeriod.status === "active" ? "Đang mở nộp" : selectedPeriod.status}
           </Badge>
           {selectedPeriod.submission_deadline && (
             <span className="text-xs text-slate-600 font-medium">
@@ -749,7 +749,7 @@ export default function UserCriteriaPage() {
         <CardContent className="p-5 space-y-4">
           <div className="flex items-center justify-between text-sm">
             <span className="font-bold text-slate-950">
-              Tiến độ hoàn thành minh chứng & nộp bài
+              Tiến độ hoàn thành minh chứng & nộp
             </span>
             <span className="font-black text-emerald-800 text-base">{progressPercent}%</span>
           </div>
