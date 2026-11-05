@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
+import { triggerPushNotification } from "@/lib/push";
 import type {
   EvaluationPeriod,
   PeriodStatus,
@@ -386,6 +387,13 @@ export default function PeriodsPage() {
                   link_url: "/user/criteria",
                 }))
               );
+
+              triggerPushNotification({
+                recipientUserIds: users.map((u) => u.id),
+                title: "Đợt đánh giá mới đã chính thức mở",
+                message: `Đợt đánh giá "${newPeriod.name}" đã mở tiếp nhận minh chứng.`,
+                url: "/user/criteria",
+              });
             }
           }
         }
@@ -454,6 +462,13 @@ export default function PeriodsPage() {
                 link_url: "/user/criteria",
               }))
             );
+
+            triggerPushNotification({
+              recipientUserIds: users.map((u) => u.id),
+              title: "Đợt đánh giá mới đã chính thức mở",
+              message: `Đợt đánh giá "${periodInfo?.name || "Công tác Đoàn"}" đã mở tiếp nhận minh chứng.`,
+              url: "/user/criteria",
+            });
           }
         }
       }

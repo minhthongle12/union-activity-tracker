@@ -21,6 +21,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { Button } from "@/components/ui/button";
 import {
@@ -54,6 +55,9 @@ export function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { profile, logout } = useAuth();
   const navigate = useNavigate();
+
+  // Listen to realtime notifications
+  useRealtimeNotifications();
 
   const { data: unreadCount } = useQuery({
     queryKey: ["unread_notifications_admin", profile?.id],

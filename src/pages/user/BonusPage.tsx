@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { useGlobalLoading } from "@/contexts/LoadingContext";
+import { triggerPushNotification } from "@/lib/push";
 import type { BonusRequest, BonusStatus, EvaluationPeriod } from "@/types/database";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -303,6 +304,7 @@ export default function UserBonusPage() {
           .eq("role", "admin");
 
         if (adminUsers && adminUsers.length > 0) {
+          const adminIds = adminUsers.map((a) => a.id);
           await supabase.from("notifications").insert(
             adminUsers.map((a) => ({
               recipient_id: a.id,
@@ -312,6 +314,15 @@ export default function UserBonusPage() {
               link_url: "/admin/bonus",
             }))
           );
+
+          // Web Push Notification to Admins
+          await triggerPushNotification({
+            userIds: adminIds,
+            title: "Đề xuất điểm cộng mới",
+            body: `${profile?.display_name || "Đơn vị"} vừa gửi đề xuất điểm cộng: "${form.title.trim()}". Yêu cầu: +${form.requested_score}đ.`,
+            url: "/admin/bonus",
+            tag: "bonus-proposal-submitted",
+          });
         }
       }
     },

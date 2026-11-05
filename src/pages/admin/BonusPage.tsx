@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
+import { triggerPushNotification } from "@/lib/push";
 import type { BonusRequest, BonusStatus, Organization, EvaluationPeriod } from "@/types/database";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -180,6 +181,13 @@ export default function AdminBonusPage() {
                 link_url: "/user/bonus",
               }))
             );
+
+            triggerPushNotification({
+              recipientUserIds: orgUsers.map((u) => u.id),
+              title: notifTitle,
+              message: `Hoạt động "${selectedReq.title}": ${actionComment || (actionType === "approve" ? "Đã được Hội đồng thẩm định phê duyệt" : "Xem chi tiết")}`,
+              url: "/user/bonus",
+            });
           }
         }
       }

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { useGlobalLoading } from "@/contexts/LoadingContext";
+import { triggerPushNotification } from "@/lib/push";
 import type {
   EvaluationPeriod,
   Organization,
@@ -452,6 +453,13 @@ export default function ReviewPage() {
             link_url: "/user/results",
           }))
         );
+
+        triggerPushNotification({
+          recipientUserIds: orgUsers.map((u) => u.id),
+          title: `Tiêu chí ${criterion.code_snapshot} đã được xác thực`,
+          message: `Hội đồng đã thẩm định tiêu chí "${criterion.title_snapshot}". Điểm chính thức: ${officialScore}đ.`,
+          url: "/user/results",
+        });
       }
 
       toast.success(`Đã xác thực và cho điểm cuối cùng (${officialScore}đ) thành công!`);
@@ -516,6 +524,13 @@ export default function ReviewPage() {
             link_url: "/user/criteria",
           }))
         );
+
+        triggerPushNotification({
+          recipientUserIds: orgUsers.map((u) => u.id),
+          title: `Yêu cầu bổ sung minh chứng tiêu chí ${criterion.code_snapshot}`,
+          message: `Ý kiến Hội đồng: ${comment}`,
+          url: "/user/criteria",
+        });
       }
 
       toast.warning("Đã gửi yêu cầu bổ sung minh chứng cho đơn vị!");

@@ -16,6 +16,7 @@ import {
   Building,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,7 +33,7 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { to: "/user", icon: LayoutDashboard, label: "Tổng quan", end: true },
-  { to: "/user/criteria", icon: ClipboardList, label: "Bộ tiêu chí đánh giá" },
+  { to: "/user/criteria", icon: ClipboardList, label: "Tiêu chí & Minh chứng" },
   { to: "/user/evidence", icon: FolderOpen, label: "Kho minh chứng" },
   { to: "/user/bonus", icon: Award, label: "Điểm cộng" },
   { to: "/user/results", icon: Trophy, label: "Kết quả đánh giá" },
@@ -44,6 +45,9 @@ export function UserLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { profile, logout } = useAuth();
   const navigate = useNavigate();
+
+  // Listen to realtime notifications
+  useRealtimeNotifications();
 
   const { data: unreadCount } = useQuery({
     queryKey: ["unread_notifications_user", profile?.id],

@@ -1,12 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import type { Notification, Organization } from "@/types/database";
+import {
+  triggerPushNotification,
+  getPushStatus,
+  subscribeUserToPush,
+  sendTestPush,
+  isPushSupported,
+} from "@/lib/push";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -25,6 +33,10 @@ import {
   Building,
   Plus,
   Loader2,
+  Sparkles,
+  ShieldCheck,
+  CheckCircle2,
+  Radio,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,6 +44,7 @@ export default function AdminNotificationsPage() {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
   const [broadcastDialogOpen, setBroadcastDialogOpen] = useState(false);
+  const [isTestingPush, setIsTestingPush] = useState(false);
 
   const [form, setForm] = useState({
     title: "",
@@ -45,6 +58,18 @@ export default function AdminNotificationsPage() {
     queryFn: async () => {
       const { data } = await supabase.from("organizations").select("id, code, name").eq("is_active", true);
       return (data ?? []) as Organization[];
+    },
+  });
+
+  // Fetch active push subscriptions count
+  const { data: pushStats } = useQuery({
+    queryKey: ["admin_push_subscriptions_stats"],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("push_subscriptions")
+        .select("id", { count: "exact", head: true })
+        .eq("is_active", true);
+      return { activeSubscriptions: count ?? 0 };
     },
   });
 
@@ -85,15 +110,41 @@ export default function AdminNotificationsPage() {
 
       const { error } = await supabase.from("notifications").insert(rows);
       if (error) throw error;
+
+      // Trigger Web Push Notification to recipients
+      try {
+        await triggerPushNotification({
+          recipientUserIds: users.map((u) => u.id),
+          title: form.title.trim(),
+          message: form.message.trim(),
+          url: "/user/notifications",
+          broadcast: form.targetOrgId === "all",
+        });
+      } catch (pushErr) {
+        console.warn("Lỗi gửi push notification:", pushErr);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin_notifications_list"] });
-      toast.success("Đã gửi thông báo thành công!");
+      queryClient.invalidateQueries({ queryKey: ["admin_push_subscriptions_stats"] });
+      toast.success("Đã gửi thông báo trong ứng dụng & Web Push thành công!");
       setBroadcastDialogOpen(false);
       setForm({ title: "", message: "", targetOrgId: "all" });
     },
     onError: (err: Error) => toast.error("Lỗi khi gửi thông báo: " + err.message),
   });
+
+  const handleTestBroadcastPush = async () => {
+    setIsTestingPush(true);
+    try {
+      const res = await sendTestPush();
+      toast.success(res.message || "Đã gửi thông báo đẩy kiểm tra thành công!");
+    } catch (e: any) {
+      toast.error("Không thể gửi push: " + e.message);
+    } finally {
+      setIsTestingPush(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -113,6 +164,47 @@ export default function AdminNotificationsPage() {
           Gửi thông báo mới
         </Button>
       </div>
+
+      {/* VAPID & Web Push Status Overview */}
+      <Card className="bg-gradient-to-r from-blue-50/90 via-indigo-50/60 to-slate-50 border-blue-200 shadow-2xs">
+        <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shrink-0 shadow-xs">
+              <Radio className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="font-semibold text-sm sm:text-base text-slate-900">
+                  Hệ thống thông báo đẩy Web Push (VAPID RFC 8292)
+                </h4>
+                <Badge variant="outline" className="text-[10px] font-mono bg-blue-100/70 text-blue-800 border-blue-300">
+                  Vercel Serverless API
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Đang có <strong className="text-blue-700 font-semibold">{pushStats?.activeSubscriptions || 0} thiết bị</strong> của đoàn viên / cơ sở đăng ký nhận thông báo đẩy.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleTestBroadcastPush}
+              disabled={isTestingPush}
+              className="text-xs h-8 gap-1.5 bg-white border-blue-300 text-blue-700 hover:bg-blue-50"
+            >
+              {isTestingPush ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Send className="h-3.5 w-3.5" />
+              )}
+              Gửi thông báo đẩy thử nghiệm
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Notifications List */}
       <Card>

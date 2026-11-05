@@ -3,6 +3,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import type { Notification } from "@/types/database";
+import {
+  getPushStatus,
+  subscribeUserToPush,
+  unsubscribeUserFromPush,
+  sendTestPush,
+  isPushSupported,
+} from "@/lib/push";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +23,10 @@ import {
   FileCheck,
   Calendar,
   Loader2,
+  Send,
+  ShieldCheck,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -23,6 +34,19 @@ export default function NotificationsPage() {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
   const [pushEnabled, setPushEnabled] = useState(false);
+  const [isSubscribing, setIsSubscribing] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+  const [pushStatus, setPushStatus] = useState<{
+    supported: boolean;
+    permission: NotificationPermission;
+    isSubscribed: boolean;
+    subscription: PushSubscription | null;
+  }>({
+    supported: isPushSupported(),
+    permission: typeof window !== "undefined" && "Notification" in window ? Notification.permission : "default",
+    isSubscribed: false,
+    subscription: null,
+  });
 
   // Fetch notifications
   const { data: notifications, isLoading } = useQuery({
@@ -51,64 +75,61 @@ export default function NotificationsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user_notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["unread_notifications_user"] });
       toast.success("Đã đánh dấu đọc tất cả thông báo.");
     },
   });
 
-  // Check initial notification permission
+  // Check initial notification status
   useEffect(() => {
-    if ("Notification" in window && Notification.permission === "granted") {
-      setPushEnabled(true);
+    async function checkStatus() {
+      const status = await getPushStatus();
+      setPushStatus(status);
+      setPushEnabled(status.isSubscribed && status.permission === "granted");
     }
-  }, []);
+    checkStatus();
+  }, [profile?.id]);
 
-  // Request browser push permission
+  // Handle Toggle Push Notification
   const handleTogglePush = async (enabled: boolean) => {
-    if (enabled) {
-      if (!("Notification" in window)) {
-        toast.error("Trình duyệt của bạn không hỗ trợ Web Push Notification.");
-        return;
-      }
+    if (!profile?.id) {
+      toast.error("Vui lòng đăng nhập để thiết lập thông báo.");
+      return;
+    }
 
-      const permission = await Notification.requestPermission();
-      if (permission === "granted") {
+    setIsSubscribing(true);
+    try {
+      if (enabled) {
+        await subscribeUserToPush(profile.id);
+        const nextStatus = await getPushStatus();
+        setPushStatus(nextStatus);
         setPushEnabled(true);
-
-        if ("serviceWorker" in navigator) {
-          try {
-            const reg = await navigator.serviceWorker.register("/sw.js");
-            const sub = await reg.pushManager.getSubscription();
-            if (sub && profile?.id) {
-              const p256dh = sub.getKey("p256dh")
-                ? btoa(String.fromCharCode(...new Uint8Array(sub.getKey("p256dh")!)))
-                : "";
-              const auth = sub.getKey("auth")
-                ? btoa(String.fromCharCode(...new Uint8Array(sub.getKey("auth")!)))
-                : "";
-
-              await supabase.from("push_subscriptions").upsert(
-                {
-                  user_id: profile.id,
-                  endpoint: sub.endpoint,
-                  p256dh,
-                  auth,
-                  is_active: true,
-                },
-                { onConflict: "endpoint" }
-              );
-            }
-          } catch (err) {
-            console.warn("ServiceWorker registration notice:", err);
-          }
-        }
-
-        toast.success("Đã kích hoạt nhận thông báo đẩy trên trình duyệt thành công!");
+        toast.success("Đã kích hoạt Web Push Notification (VAPID) thành công!");
       } else {
-        toast.error("Bạn đã từ chối cấp quyền thông báo trên trình duyệt.");
+        await unsubscribeUserFromPush(profile.id);
+        const nextStatus = await getPushStatus();
+        setPushStatus(nextStatus);
+        setPushEnabled(false);
+        toast.info("Đã tắt thông báo đẩy trên thiết bị này.");
       }
-    } else {
+    } catch (err: any) {
+      toast.error(err.message || "Lỗi khi cấu hình thông báo đẩy");
       setPushEnabled(false);
-      toast.info("Đã tắt thông báo đẩy.");
+    } finally {
+      setIsSubscribing(false);
+    }
+  };
+
+  // Handle Send Test Push
+  const handleSendTestPush = async () => {
+    setIsTesting(true);
+    try {
+      await sendTestPush(pushStatus.subscription);
+      toast.success("Đã kích hoạt gửi thông báo kiểm tra! Vui lòng kiểm tra màn hình trình duyệt.");
+    } catch (err: any) {
+      toast.error("Không thể gửi thông báo thử nghiệm: " + err.message);
+    } finally {
+      setIsTesting(false);
     }
   };
 
@@ -138,26 +159,91 @@ export default function NotificationsPage() {
       </div>
 
       {/* Web Push Configuration Card */}
-      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
-        <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-blue-600 flex items-center justify-center text-white shrink-0">
-              <Sparkles className="h-5 w-5" />
+      <Card className="bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-slate-50 border-blue-200/90 shadow-2xs">
+        <CardContent className="p-4 sm:p-5 space-y-3.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shrink-0 shadow-xs">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="font-semibold text-sm sm:text-base text-slate-900">
+                    Thông báo đẩy trên trình duyệt (Web Push Notification)
+                  </h4>
+                  <Badge variant="outline" className="text-[10px] font-mono bg-blue-100/70 text-blue-800 border-blue-300">
+                    VAPID RFC 8292
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Nhận thông báo ngay lập tức ngay cả khi không mở tab hệ thống (thông qua Service Worker máy khách)
+                </p>
+              </div>
             </div>
-            <div>
-              <h4 className="font-semibold text-sm text-slate-900">
-                Thông báo đẩy trên trình duyệt (Browser Push Notification)
-              </h4>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Nhận cảnh báo ngay lập tức ngay cả khi không mở tab hệ thống (sử dụng VAPID & Service Worker)
-              </p>
+
+            <div className="flex items-center gap-3 self-end sm:self-center shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-slate-700">
+                  {isSubscribing ? "Đang xử lý..." : pushEnabled ? "Đang bật" : "Chưa bật"}
+                </span>
+                <Switch
+                  checked={pushEnabled}
+                  disabled={isSubscribing || !pushStatus.supported}
+                  onCheckedChange={handleTogglePush}
+                />
+              </div>
+
+              {pushEnabled && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSendTestPush}
+                  disabled={isTesting}
+                  className="text-xs h-8 gap-1.5 bg-white border-blue-300 text-blue-700 hover:bg-blue-50"
+                >
+                  {isTesting ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Send className="h-3.5 w-3.5" />
+                  )}
+                  Gửi thử thông báo
+                </Button>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs font-medium text-slate-700">
-              {pushEnabled ? "Đang bật" : "Chưa bật"}
+
+          {/* Diagnostic Info Pills */}
+          <div className="flex items-center gap-2 pt-2 border-t border-blue-100 flex-wrap text-[11px] text-slate-600">
+            <span className="flex items-center gap-1">
+              Hỗ trợ:
+              {pushStatus.supported ? (
+                <span className="text-emerald-700 font-medium inline-flex items-center gap-0.5">
+                  <CheckCircle2 className="h-3 w-3" /> Trình duyệt hỗ trợ
+                </span>
+              ) : (
+                <span className="text-red-600 font-medium inline-flex items-center gap-0.5">
+                  <XCircle className="h-3 w-3" /> Không hỗ trợ
+                </span>
+              )}
             </span>
-            <Switch checked={pushEnabled} onCheckedChange={handleTogglePush} />
+            <span className="text-slate-300">•</span>
+            <span className="flex items-center gap-1">
+              Quyền thông báo:
+              <strong className="font-semibold text-slate-800 uppercase">
+                {pushStatus.permission}
+              </strong>
+            </span>
+            <span className="text-slate-300">•</span>
+            <span className="flex items-center gap-1">
+              Kết nối máy chủ:
+              {pushEnabled ? (
+                <span className="text-emerald-700 font-semibold inline-flex items-center gap-0.5">
+                  <ShieldCheck className="h-3.5 w-3.5" /> Đã kết nối VAPID
+                </span>
+              ) : (
+                <span className="text-slate-500">Chưa kết nối</span>
+              )}
+            </span>
           </div>
         </CardContent>
       </Card>

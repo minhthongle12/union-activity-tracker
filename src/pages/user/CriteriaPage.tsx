@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { useGlobalLoading } from "@/contexts/LoadingContext";
+import { triggerPushNotification } from "@/lib/push";
 import type {
   EvaluationPeriod,
   PeriodCriterion,
@@ -412,15 +413,28 @@ export default function UserCriteriaPage() {
 
       if (adminUsers && adminUsers.length > 0) {
         const crit = criteriaItems.find((i) => i.criterion.id === criterionId);
+        const adminIds = adminUsers.map((a) => a.id);
+        const title = `Đơn vị nộp minh chứng tiêu chí ${crit?.criterion.code_snapshot || ""}`;
+        const message = `${profile.display_name || "Đoàn cơ sở"} vừa nộp minh chứng tiêu chí "${crit?.criterion.title_snapshot || ""}". Tự chấm: ${selfScore}đ.`;
+
         await supabase.from("notifications").insert(
           adminUsers.map((a) => ({
             recipient_id: a.id,
-            title: `Đơn vị nộp minh chứng tiêu chí ${crit?.criterion.code_snapshot || ""}`,
-            message: `${profile.display_name || "Đoàn cơ sở"} vừa nộp minh chứng tiêu chí "${crit?.criterion.title_snapshot || ""}". Tự chấm: ${selfScore}đ.`,
+            title,
+            message,
             type: "submission_received",
             link_url: "/admin/review",
           }))
         );
+
+        // Web Push Notification to Admins
+        await triggerPushNotification({
+          userIds: adminIds,
+          title,
+          body: message,
+          url: "/admin/review",
+          tag: `submission-${criterionId}`,
+        });
       }
     }
   };
