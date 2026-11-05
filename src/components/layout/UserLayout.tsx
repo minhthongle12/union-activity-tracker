@@ -35,11 +35,11 @@ import { PWAInstallPrompt } from "@/components/pwa/PWAInstallPrompt";
 const navItems = [
   { to: "/user", icon: LayoutDashboard, label: "Tổng quan", end: true },
   { to: "/user/criteria", icon: Calendar, label: "Đợt đánh giá" },
-  { to: "/user/evidence", icon: FolderOpen, label: "Kho minh chứng" },
   { to: "/user/bonus", icon: Award, label: "Điểm cộng" },
   { to: "/user/results", icon: Trophy, label: "Kết quả đánh giá" },
   { to: "/user/notifications", icon: Bell, label: "Thông báo" },
   { to: "/user/account", icon: User, label: "Tài khoản" },
+  { to: "/user/evidence", icon: FolderOpen, label: "Kho minh chứng" },
 ];
 
 export function UserLayout() {
