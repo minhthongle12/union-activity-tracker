@@ -628,11 +628,11 @@ export default function UserBonusPage() {
 
       {/* Dialog Create Bonus Proposal */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="w-[94vw] max-w-xl max-h-[92dvh] flex flex-col p-4 sm:p-6 overflow-hidden rounded-2xl border-emerald-200">
+        <DialogContent className="w-[95vw] sm:w-[90vw] max-w-xl max-h-[92dvh] flex flex-col p-3.5 sm:p-6 overflow-hidden rounded-2xl border-emerald-200">
           <DialogHeader className="shrink-0 pb-1 text-left">
-            <DialogTitle className="text-lg sm:text-xl font-extrabold text-slate-950 flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-emerald-700" />
-              Đề xuất Điểm thưởng Thi đua
+            <DialogTitle className="text-base sm:text-xl font-extrabold text-slate-950 flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-emerald-700 shrink-0" />
+              <span>Đề xuất Điểm thưởng Thi đua</span>
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-600 font-medium">
               Chọn tiêu chí điểm thưởng, nhập số lượng em học sinh hoặc mô hình đạt giải để hệ thống tự động tính điểm đề xuất.
@@ -649,14 +649,14 @@ export default function UserBonusPage() {
                 value={form.organization_period_id}
                 onValueChange={(val) => setForm({ ...form, organization_period_id: val })}
               >
-                <SelectTrigger className="mt-1 w-full text-xs font-bold text-slate-950 h-10 border-emerald-200 rounded-xl">
+                <SelectTrigger className="mt-1 w-full text-xs font-bold text-slate-950 min-h-[44px] h-auto py-2.5 px-3 border-emerald-200 rounded-xl [&>span]:w-full [&>span]:min-w-0 [&>span]:text-left [&>span]:block">
                   <SelectValue placeholder="-- Chọn đợt đánh giá --" />
                 </SelectTrigger>
-                <SelectContent className="max-w-[90vw] rounded-xl">
+                <SelectContent className="w-[calc(100vw-2.5rem)] sm:w-[var(--radix-select-trigger-width)] max-w-lg rounded-xl" position="popper" sideOffset={4}>
                   {(assignedPeriods ?? []).map((op) => (
-                    <SelectItem key={op.id} value={op.id} className="py-2">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 text-left">
-                        <span className="font-bold text-slate-950 line-clamp-1">{op.period.name}</span>
+                    <SelectItem key={op.id} value={op.id} className="py-2.5 pl-8 pr-2">
+                      <div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2 text-left min-w-0">
+                        <span className="font-bold text-slate-950 whitespace-normal break-words leading-snug">{op.period.name}</span>
                         <span className="text-[11px] text-slate-600 shrink-0 font-medium">
                           ({op.period.status === "active" ? "Đang mở" : op.period.status})
                         </span>
@@ -676,29 +676,41 @@ export default function UserBonusPage() {
                 value={form.bonus_code}
                 onValueChange={handleBonusCodeChange}
               >
-                <SelectTrigger className="mt-1 w-full text-xs font-bold text-slate-950 h-10 border-emerald-300 bg-emerald-50/40 rounded-xl">
+                <SelectTrigger className="mt-1 w-full text-xs font-bold text-slate-950 min-h-[48px] h-auto py-2.5 px-3 border-emerald-300 bg-emerald-50/40 rounded-xl text-left [&>span]:w-full [&>span]:min-w-0 [&>span]:text-left [&>span]:block [&>span]:whitespace-normal [&>span]:line-clamp-none">
                   <SelectValue placeholder="-- Chọn tiêu chí điểm thưởng --" />
                 </SelectTrigger>
-                <SelectContent className="max-w-[90vw] rounded-xl">
+                <SelectContent className="w-[calc(100vw-2.5rem)] sm:w-[var(--radix-select-trigger-width)] max-w-lg rounded-xl max-h-[60vh] overflow-y-auto" position="popper" sideOffset={4}>
                   {criteriaList.map((crit) => (
-                    <SelectItem key={crit.code} value={crit.code} className="py-2.5">
-                      <div className="flex flex-col text-left">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-[11px] font-black bg-emerald-100 text-emerald-900 px-1.5 py-0.5 rounded">
+                    <SelectItem key={crit.code} value={crit.code} className="py-2.5 pl-8 pr-2">
+                      <div className="flex flex-col text-left min-w-0 w-full">
+                        <div className="flex items-start gap-1.5 min-w-0">
+                          <span className="font-mono text-[10px] font-black bg-emerald-100 text-emerald-950 px-1.5 py-0.5 rounded shrink-0 mt-0.5">
                             {crit.code}
                           </span>
-                          <span className="font-bold text-slate-950 text-xs">
+                          <span className="font-bold text-slate-950 text-xs whitespace-normal break-words leading-snug min-w-0 flex-1">
                             {crit.name}
                           </span>
                         </div>
-                        <span className="text-[11px] text-emerald-800 font-semibold mt-0.5">
+                        <span className="text-[11px] text-emerald-800 font-semibold mt-1 pl-0.5">
                           {crit.base_points} điểm / {crit.unit}
                         </span>
                       </div>
                     </SelectItem>
                   ))}
-                  <SelectItem value="KHAC" className="py-2">
-                    <span className="font-bold text-slate-950">[KHAC] Điểm thưởng thi đua khác</span>
+                  <SelectItem value="KHAC" className="py-2.5 pl-8 pr-2">
+                    <div className="flex flex-col text-left min-w-0 w-full">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="font-mono text-[10px] font-black bg-slate-200 text-slate-900 px-1.5 py-0.5 rounded shrink-0">
+                          KHAC
+                        </span>
+                        <span className="font-bold text-slate-950 text-xs whitespace-normal break-words">
+                          Điểm thưởng thi đua khác
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-slate-600 font-medium mt-0.5 pl-0.5">
+                        Tiêu chí phát sinh đặc thù ngoài 5 nhóm trên
+                      </span>
+                    </div>
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -706,12 +718,12 @@ export default function UserBonusPage() {
 
             {/* Evidence Guidelines Box for chosen criteria */}
             {selectedCriterion?.evidence_guidelines && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl space-y-1">
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl space-y-1 overflow-hidden break-words">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900">
                   <Info className="h-4 w-4 text-emerald-700 shrink-0" />
-                  <span>Hướng dẫn & Yêu cầu minh chứng quy định:</span>
+                  <span className="break-words">Hướng dẫn & Yêu cầu minh chứng quy định:</span>
                 </div>
-                <p className="text-[11px] text-slate-800 whitespace-pre-line font-medium pl-5 leading-relaxed">
+                <p className="text-[11px] text-slate-800 whitespace-pre-line font-medium pl-5 leading-relaxed break-words">
                   {selectedCriterion.evidence_guidelines}
                 </p>
               </div>

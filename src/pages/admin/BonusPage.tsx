@@ -562,11 +562,11 @@ export default function AdminBonusPage() {
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
         <DialogContent className="w-[94vw] max-w-3xl max-h-[92dvh] flex flex-col p-4 sm:p-6 overflow-hidden rounded-2xl border-emerald-200">
           <DialogHeader className="shrink-0 pb-1 text-left">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
               <div>
-                <DialogTitle className="text-lg sm:text-xl font-extrabold text-slate-950 flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-emerald-700" />
-                  Cấu hình Danh mục Điểm thưởng (Mã tiêu chí)
+                <DialogTitle className="text-base sm:text-xl font-extrabold text-slate-950 flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-emerald-700 shrink-0" />
+                  <span>Cấu hình Danh mục Điểm thưởng</span>
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-600 font-medium mt-0.5">
                   Quản lý 5 mã tiêu chí thưởng chuẩn theo Khung tiêu chí Đội. User sẽ chọn mã này khi tạo đề xuất điểm thưởng.
@@ -577,7 +577,7 @@ export default function AdminBonusPage() {
                 variant="outline"
                 size="sm"
                 onClick={handleResetCatalog}
-                className="text-xs text-slate-700 font-bold border-slate-300 gap-1 rounded-xl h-8 shrink-0"
+                className="text-xs text-slate-700 font-bold border-slate-300 gap-1 rounded-xl h-8 shrink-0 self-start sm:self-auto"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
                 Khôi phục chuẩn
