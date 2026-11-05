@@ -66,6 +66,7 @@ import {
   Layers,
   Pencil,
   Trash2,
+  Unlock,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -174,6 +175,8 @@ export default function PeriodsPage() {
   const [configTab, setConfigTab] = useState<"criteria" | "orgs">("criteria");
   const [selectedCriteriaIds, setSelectedCriteriaIds] = useState<string[]>([]);
   const [selectedOrgIds, setSelectedOrgIds] = useState<string[]>([]);
+  const [allowEditActive, setAllowEditActive] = useState(false);
+  const isConfigEditable = configPeriod?.status === "draft" || allowEditActive;
 
   // Queries
   const { data: periods, isLoading: periodsLoading } = useQuery({
@@ -490,7 +493,7 @@ export default function PeriodsPage() {
     onError: (err: Error) => toast.error("Không thể xóa đợt đánh giá: " + err.message),
   });
 
-  // Save criteria snapshot to period
+  // Save criteria snapshot to period (Safe differential update)
   const saveCriteriaSnapshotMutation = useMutation({
     mutationFn: async () => {
       if (!configPeriod) return;
@@ -498,31 +501,70 @@ export default function PeriodsPage() {
         throw new Error("Vui lòng chọn ít nhất 1 tiêu chí.");
       }
 
-      // 1. Delete previous snapshot if in draft
-      await supabase.from("period_criteria").delete().eq("period_id", configPeriod.id);
+      // 1. Fetch current criteria snapshots in this period
+      const { data: existingPc, error: fetchErr } = await supabase
+        .from("period_criteria")
+        .select("id, source_criteria_id")
+        .eq("period_id", configPeriod.id);
 
-      // 2. Fetch chosen criteria from library with category
-      const chosen = (libraryCriteria ?? []).filter((c) => selectedCriteriaIds.includes(c.id));
+      if (fetchErr) throw fetchErr;
 
-      const snapshots = chosen.map((c: any) => ({
-        period_id: configPeriod.id,
-        source_criteria_id: c.id,
-        category_name_snapshot: c.category?.name || "Chung",
-        code_snapshot: c.code,
-        title_snapshot: c.title,
-        description_snapshot: c.description,
-        scoring_snapshot: c.scoring_guidelines,
-        max_score_snapshot: c.max_score,
-        req_doc1: c.req_doc1,
-        req_doc2: c.req_doc2,
-        req_link3: c.req_link3,
-        responsible_unit_snapshot: c.responsible_unit,
-        deadline_snapshot: c.deadline,
-        sort_order: c.sort_order,
-      }));
+      const existingSourceIds = (existingPc ?? []).map((p) => p.source_criteria_id).filter(Boolean);
 
-      const { error } = await supabase.from("period_criteria").insert(snapshots);
-      if (error) throw error;
+      // 2. Identify newly added
+      const newlyAddedIds = selectedCriteriaIds.filter((id) => !existingSourceIds.includes(id));
+
+      // 3. Identify removed criteria
+      const removedPc = (existingPc ?? []).filter(
+        (p) => p.source_criteria_id && !selectedCriteriaIds.includes(p.source_criteria_id)
+      );
+
+      // Check if removed criteria have existing submissions before deleting
+      if (removedPc.length > 0) {
+        const removedPcIds = removedPc.map((p) => p.id);
+        const { data: activeSubs } = await supabase
+          .from("submissions")
+          .select("id, period_criteria_id")
+          .in("period_criteria_id", removedPcIds);
+
+        const blockedPcIds = (activeSubs ?? []).map((s) => s.period_criteria_id);
+        const safeToDeletePcIds = removedPcIds.filter((id) => !blockedPcIds.includes(id));
+
+        if (blockedPcIds.length > 0) {
+          toast.warning("Một số tiêu chí đã có đơn vị nộp bài nên hệ thống giữ lại để bảo vệ kết quả.");
+        }
+        if (safeToDeletePcIds.length > 0) {
+          const { error: delErr } = await supabase
+            .from("period_criteria")
+            .delete()
+            .in("id", safeToDeletePcIds);
+          if (delErr) throw delErr;
+        }
+      }
+
+      // 4. Insert newly added criteria
+      if (newlyAddedIds.length > 0) {
+        const chosen = (libraryCriteria ?? []).filter((c) => newlyAddedIds.includes(c.id));
+        const snapshots = chosen.map((c: any) => ({
+          period_id: configPeriod.id,
+          source_criteria_id: c.id,
+          category_name_snapshot: c.category?.name || "Chung",
+          code_snapshot: c.code,
+          title_snapshot: c.title,
+          description_snapshot: c.description,
+          scoring_snapshot: c.scoring_guidelines,
+          max_score_snapshot: c.max_score,
+          req_doc1: c.req_doc1,
+          req_doc2: c.req_doc2,
+          req_link3: c.req_link3,
+          responsible_unit_snapshot: c.responsible_unit,
+          deadline_snapshot: c.deadline,
+          sort_order: c.sort_order,
+        }));
+
+        const { error: insErr } = await supabase.from("period_criteria").insert(snapshots);
+        if (insErr) throw insErr;
+      }
     },
     onSuccess: () => {
       refetchPeriodDetails();
@@ -532,7 +574,7 @@ export default function PeriodsPage() {
     onError: (err: Error) => toast.error("Lỗi: " + err.message),
   });
 
-  // Save participating orgs to period
+  // Save participating orgs to period (Safe differential update)
   const saveOrgsMutation = useMutation({
     mutationFn: async () => {
       if (!configPeriod) return;
@@ -540,17 +582,57 @@ export default function PeriodsPage() {
         throw new Error("Vui lòng chọn ít nhất 1 đơn vị.");
       }
 
-      // Remove existing not in list, add new
-      await supabase.from("organization_periods").delete().eq("period_id", configPeriod.id);
+      // 1. Fetch current assignments
+      const { data: existingOps, error: fetchErr } = await supabase
+        .from("organization_periods")
+        .select("id, organization_id")
+        .eq("period_id", configPeriod.id);
 
-      const rows = selectedOrgIds.map((orgId) => ({
-        period_id: configPeriod.id,
-        organization_id: orgId,
-        status: "assigned" as const,
-      }));
+      if (fetchErr) throw fetchErr;
 
-      const { error } = await supabase.from("organization_periods").insert(rows);
-      if (error) throw error;
+      const existingOrgIds = (existingOps ?? []).map((op) => op.organization_id);
+
+      // 2. Newly added orgs
+      const newlyAddedOrgIds = selectedOrgIds.filter((id) => !existingOrgIds.includes(id));
+
+      // 3. Removed orgs
+      const removedOps = (existingOps ?? []).filter(
+        (op) => !selectedOrgIds.includes(op.organization_id)
+      );
+
+      if (removedOps.length > 0) {
+        const removedOpIds = removedOps.map((op) => op.id);
+        const { data: activeSubs } = await supabase
+          .from("submissions")
+          .select("id, organization_period_id")
+          .in("organization_period_id", removedOpIds);
+
+        const blockedOpIds = (activeSubs ?? []).map((s) => s.organization_period_id);
+        const safeToDeleteOpIds = removedOpIds.filter((id) => !blockedOpIds.includes(id));
+
+        if (blockedOpIds.length > 0) {
+          toast.warning("Một số Liên đội đã có bài nộp nên hệ thống giữ lại để bảo vệ bài nộp.");
+        }
+        if (safeToDeleteOpIds.length > 0) {
+          const { error: delErr } = await supabase
+            .from("organization_periods")
+            .delete()
+            .in("id", safeToDeleteOpIds);
+          if (delErr) throw delErr;
+        }
+      }
+
+      // 4. Insert newly added orgs
+      if (newlyAddedOrgIds.length > 0) {
+        const rows = newlyAddedOrgIds.map((orgId) => ({
+          period_id: configPeriod.id,
+          organization_id: orgId,
+          status: "assigned" as const,
+        }));
+
+        const { error: insErr } = await supabase.from("organization_periods").insert(rows);
+        if (insErr) throw insErr;
+      }
     },
     onSuccess: () => {
       refetchPeriodDetails();
@@ -611,6 +693,7 @@ export default function PeriodsPage() {
 
   async function openConfig(period: EvaluationPeriod) {
     setConfigPeriod(period);
+    setAllowEditActive(false);
     const details = await fetchPeriodDetails(period.id);
     setSelectedCriteriaIds(
       details.criteria.map((c) => c.source_criteria_id).filter(Boolean) as string[]
@@ -1337,9 +1420,31 @@ export default function PeriodsPage() {
           </DialogHeader>
 
           {configPeriod?.status !== "draft" && (
-            <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800 flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              Đợt đánh giá đã ở trạng thái {configPeriod?.status}. Các tiêu chí snapshot và phân công đã được cố định theo quy chuẩn PRD.
+            <div className="rounded-xl bg-amber-50 border border-amber-200 p-3.5 text-xs text-amber-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 text-amber-700" />
+                <span>
+                  Đợt đánh giá đang ở trạng thái <strong>{configPeriod?.status === "active" ? "Đang hoạt động" : configPeriod?.status}</strong>.
+                  {!allowEditActive
+                    ? " Mặc định hệ thống khóa để bảo vệ dữ liệu đang nộp của các trường."
+                    : " Chế độ chỉnh sửa đang được bật. Bạn có thể chọn thêm tiêu chí hoặc đơn vị tham gia."}
+                </span>
+              </div>
+              {!allowEditActive ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setAllowEditActive(true)}
+                  className="bg-white hover:bg-amber-100 text-amber-900 border-amber-300 font-bold text-xs shrink-0 gap-1.5"
+                >
+                  <Unlock className="h-3.5 w-3.5 text-amber-700" />
+                  Mở khóa chỉnh sửa
+                </Button>
+              ) : (
+                <Badge className="bg-emerald-600 text-white border-0 text-xs shrink-0">
+                  Đã mở khóa chỉnh sửa
+                </Badge>
+              )}
             </div>
           )}
 
@@ -1361,7 +1466,7 @@ export default function PeriodsPage() {
                 <p className="text-xs text-muted-foreground">
                   Hệ thống sẽ tạo bản sao bất biến (immutable snapshot) cho đợt này:
                 </p>
-                {configPeriod?.status === "draft" && (
+                {isConfigEditable && (
                   <div className="flex items-center gap-2 flex-wrap">
                     {/* Clone from other period */}
                     {(periods ?? []).filter((p) => p.id !== configPeriod?.id).length > 0 && (
@@ -1427,7 +1532,7 @@ export default function PeriodsPage() {
                     >
                       <Checkbox
                         checked={checked}
-                        disabled={configPeriod?.status !== "draft"}
+                        disabled={!isConfigEditable}
                         onCheckedChange={(val) => {
                           if (val) {
                             setSelectedCriteriaIds([...selectedCriteriaIds, c.id]);
@@ -1449,12 +1554,13 @@ export default function PeriodsPage() {
                 })}
               </div>
 
-              {configPeriod?.status === "draft" && (
+              {isConfigEditable && (
                 <div className="flex justify-end pt-2">
                   <Button
                     size="sm"
                     onClick={() => saveCriteriaSnapshotMutation.mutate()}
                     disabled={saveCriteriaSnapshotMutation.isPending}
+                    className="bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-xs"
                   >
                     {saveCriteriaSnapshotMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                     Lưu danh sách tiêu chí
@@ -1469,7 +1575,7 @@ export default function PeriodsPage() {
                 <p className="text-xs text-muted-foreground">
                   Chọn các Liên đội được giao nộp bài trong đợt này:
                 </p>
-                {configPeriod?.status === "draft" && (
+                {isConfigEditable && (
                   <div className="flex gap-2">
                     <Button
                       variant="ghost"
@@ -1501,7 +1607,7 @@ export default function PeriodsPage() {
                     >
                       <Checkbox
                         checked={checked}
-                        disabled={configPeriod?.status !== "draft"}
+                        disabled={!isConfigEditable}
                         onCheckedChange={(val) => {
                           if (val) {
                             setSelectedOrgIds([...selectedOrgIds, org.id]);
@@ -1522,12 +1628,13 @@ export default function PeriodsPage() {
                 })}
               </div>
 
-              {configPeriod?.status === "draft" && (
+              {isConfigEditable && (
                 <div className="flex justify-end pt-2">
                   <Button
                     size="sm"
                     onClick={() => saveOrgsMutation.mutate()}
                     disabled={saveOrgsMutation.isPending}
+                    className="bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-xs"
                   >
                     {saveOrgsMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                     Lưu danh sách đơn vị
