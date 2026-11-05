@@ -10,6 +10,14 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import {
   FileSpreadsheet,
   Download,
   Upload,
@@ -95,6 +103,11 @@ export default function ImportExportPage() {
   const [detectedBonusList, setDetectedBonusList] = useState<BonusCriterion[]>([]);
   const [syncBonus, setSyncBonus] = useState(true);
   const [applyToActivePeriod, setApplyToActivePeriod] = useState(true);
+
+  // Workbook and multiple sheet navigation
+  const [workbookRef, setWorkbookRef] = useState<ExcelJS.Workbook | null>(null);
+  const [availableSheets, setAvailableSheets] = useState<string[]>([]);
+  const [selectedSheetIndex, setSelectedSheetIndex] = useState<number>(0);
 
   // Fetch active evaluation period
   const { data: activePeriod } = useQuery({
@@ -331,7 +344,369 @@ export default function ImportExportPage() {
   };
 
   // ============================================================
-  // Parse Uploaded Excel File (Hỗ trợ cả 2 định dạng)
+  // Parse Worksheet & Intelligent Deduplication
+  // ============================================================
+  const parseWorksheet = (worksheet: ExcelJS.Worksheet) => {
+    // Detect format by scanning first 15 rows
+    let headerRowIndex = -1;
+    let isDoiFramework = false;
+    let colTT = -1;
+    let colCategory = -1;
+    let colTitle = -1;
+    let colScore = -1;
+    let colEvidence = -1;
+
+    for (let r = 1; r <= Math.min(15, worksheet.rowCount); r++) {
+      const row = worksheet.getRow(r);
+      let hasTitle = false;
+      let hasScore = false;
+      let hasCategoryOrTT = false;
+
+      row.eachCell((cell, colNumber) => {
+        const val = extractCellText(cell.value).toLowerCase();
+        if (val === "criterion_code" || val === "criterion_title") {
+          // Technical format
+          headerRowIndex = r;
+          isDoiFramework = false;
+        }
+        if (val.includes("nội dung thực hiện") || val.includes("nội dung")) {
+          hasTitle = true;
+          colTitle = colNumber;
+        }
+        if (val === "điểm" || val.includes("điểm")) {
+          hasScore = true;
+          colScore = colNumber;
+        }
+        if (val === "tiêu chí" || val.includes("tiêu chí") || val === "tt" || val === "stt") {
+          hasCategoryOrTT = true;
+          if (val.includes("tiêu chí")) colCategory = colNumber;
+          if (val === "tt" || val === "stt") colTT = colNumber;
+        }
+        if (val.includes("minh chứng") || val.includes("yêu cầu")) {
+          colEvidence = colNumber;
+        }
+      });
+
+      if (hasTitle && (hasScore || hasCategoryOrTT)) {
+        headerRowIndex = r;
+        isDoiFramework = true;
+        break;
+      }
+      if (headerRowIndex !== -1 && !isDoiFramework) break;
+    }
+
+    if (headerRowIndex === -1) {
+      throw new Error(
+        "Không tìm thấy dòng tiêu đề bảng tiêu chí trong trang tính này. Vui lòng đảm bảo file có các cột: 'Tiêu chí', 'Nội dung thực hiện', 'Điểm', 'Yêu cầu minh chứng'."
+      );
+    }
+
+    setDetectedFormat(isDoiFramework ? "doi_framework" : "technical");
+
+    const rows: ImportRow[] = [];
+    const bonusItems: BonusCriterion[] = [];
+    const codesSeen = new Set<string>();
+    let foundErrors = false;
+    let skippedDuplicatesCount = 0;
+
+    // ── PARSER 1: MẪU KHUNG TIÊU CHÍ CÔNG TÁC ĐỘI (Thực tế) ──
+    if (isDoiFramework) {
+      let currentCategoryName = "Chung";
+      let inBonusSection = false;
+      let categoryCount = 0;
+      let autoCriterionNum = 1;
+
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber <= headerRowIndex) return;
+
+        const getCellVal = (col: number) => {
+          if (col <= 0) return "";
+          const cell = row.getCell(col);
+          const text = extractCellText(cell.value);
+          if (text) return text;
+          if (cell.text && typeof cell.text === "string" && cell.text !== "[object Object]") {
+            return cell.text.trim();
+          }
+          return "";
+        };
+
+        const rawCategory = getCellVal(colCategory);
+        const rawTitle = getCellVal(colTitle);
+        const rawScore = getCellVal(colScore);
+        const rawEvidence = getCellVal(colEvidence);
+        const fullRowText = [rawCategory, rawTitle, rawScore, rawEvidence].join(" ").toLowerCase();
+
+        // Check if this row enters the Bonus section
+        if (
+          fullRowText.includes("điểm thưởng") ||
+          fullRowText.includes("** điểm thưởng") ||
+          rawCategory.toUpperCase().includes("ĐIỂM THƯỞNG")
+        ) {
+          inBonusSection = true;
+          // Skip the section heading row if it has no specific bonus content
+          if (!rawTitle || rawTitle.toLowerCase().includes("điểm thưởng")) {
+            return;
+          }
+        }
+
+        // Check for summary or note rows to skip
+        if (
+          fullRowText.startsWith("tổng") ||
+          fullRowText.startsWith("tổng điểm") ||
+          fullRowText.includes("ghi chú:") ||
+          fullRowText.includes("xếp loại thi đua")
+        ) {
+          return;
+        }
+
+        // Empty row
+        if (!rawTitle && !rawCategory && !rawScore) return;
+
+        // Carry forward merged category
+        if (rawCategory && !inBonusSection) {
+          // Strip any numeric prefix like "1. ", "2. " and normalize line breaks
+          currentCategoryName = rawCategory
+            .replace(/^\d+\.\s*/, "")
+            .replace(/\r?\n+/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+          categoryCount++;
+        }
+
+        // Process normal criteria row
+        if (!inBonusSection) {
+          if (!rawTitle) return; // Skip rows without criterion content
+
+          // Extract Criterion Code: look for "1.1", "2.1", "3.13", etc.
+          let criterionCode = "";
+          let cleanTitle = rawTitle;
+
+          const codeMatch = rawTitle.match(/^(\d+\.\d+)/);
+          if (codeMatch) {
+            criterionCode = codeMatch[1];
+            cleanTitle = rawTitle.replace(/^\d+\.\d+\.?\s*/, "").trim();
+          } else {
+            // Generate code if missing (e.g. 5.1, 6.1)
+            const catNumber = rawCategory.match(/^(\d+)/)?.[1] || String(categoryCount || 1);
+            criterionCode = `${catNumber}.${autoCriterionNum++}`;
+          }
+
+          // Parse score
+          let maxScore = parseFloat(rawScore);
+          if (isNaN(maxScore)) {
+            // Try to find first number in score cell
+            const numMatch = rawScore.match(/\d+(\.\d+)?/);
+            maxScore = numMatch ? parseFloat(numMatch[0]) : 0;
+          }
+
+          // Smart Deduplication: check if this code was already seen
+          const existingRow = rows.find(
+            (r) => r.criterionCode.toLowerCase() === criterionCode.toLowerCase()
+          );
+
+          if (existingRow) {
+            const normOld = existingRow.criterionTitle.toLowerCase().replace(/\s+/g, " ");
+            const normNew = cleanTitle.toLowerCase().replace(/\s+/g, " ");
+            const isDuplicateContent =
+              normOld === normNew ||
+              (normOld.length > 20 && normNew.includes(normOld.slice(0, 30))) ||
+              (normNew.length > 20 && normOld.includes(normNew.slice(0, 30)));
+
+            if (isDuplicateContent) {
+              // Exactly identical row (e.g. accidental copy-paste row in Excel like row 23 in TH Mai Thị Non)
+              skippedDuplicatesCount++;
+              return;
+            }
+
+            // Same code but different title: auto-disambiguate with suffix (e.g. 3.2a, 3.2b)
+            let letterCode = "a";
+            let newCode = `${criterionCode}${letterCode}`;
+            while (codesSeen.has(newCode.toLowerCase())) {
+              letterCode = String.fromCharCode(letterCode.charCodeAt(0) + 1);
+              newCode = `${criterionCode}${letterCode}`;
+            }
+            criterionCode = newCode;
+            codesSeen.add(criterionCode.toLowerCase());
+          } else {
+            codesSeen.add(criterionCode.toLowerCase());
+          }
+
+          const errors: string[] = [];
+          if (!cleanTitle) {
+            errors.push("Nội dung tiêu chí trống");
+          }
+          if (maxScore <= 0) {
+            errors.push("Điểm tối đa không hợp lệ (phải > 0)");
+          }
+
+          if (errors.length > 0) foundErrors = true;
+
+          rows.push({
+            rowIndex: rowNumber,
+            categoryCode: `CAT_${categoryCount || 1}`,
+            categoryName: currentCategoryName,
+            criterionCode,
+            criterionTitle: cleanTitle,
+            description: rawEvidence || "Thực hiện theo chỉ đạo của Hội đồng Đội",
+            scoringGuidelines: rawEvidence,
+            maxScore: maxScore || 1.0,
+            reqDoc1: true,
+            reqDoc2: true,
+            reqLink3: true,
+            responsibleUnit: "Liên đội",
+            deadline: "",
+            displayOrder: rows.length + 1,
+            errors,
+          });
+        } else {
+          // In Bonus section: extract bonus items
+          if (rawTitle && rawTitle.length > 5) {
+            // Skip section header rows like "** ĐIỂM THƯỞNG (5 điểm)"
+            if (rawTitle.toLowerCase().includes("điểm thưởng") && rawTitle.length < 35) {
+              return;
+            }
+
+            let bonusCode = "BONUS_OTHER";
+            if (rawTitle.toLowerCase().includes("mô hình") || rawTitle.toLowerCase().includes("sáng tạo")) {
+              bonusCode = "MO_HINH";
+            } else if (rawTitle.toLowerCase().includes("đạt giải") || rawTitle.toLowerCase().includes("cuộc thi")) {
+              bonusCode = "DAT_GIAI";
+            } else if (rawTitle.toLowerCase().includes("trung ương") || rawTitle.toLowerCase().includes("tỉnh chọn cử")) {
+              bonusCode = "CAP_TW";
+            } else if (rawTitle.toLowerCase().includes("đăng cai") || rawTitle.toLowerCase().includes("hỗ trợ tổ chức")) {
+              bonusCode = "DANG_CAI";
+            } else if (rawTitle.toLowerCase().includes("không gian đọc sách") || rawTitle.toLowerCase().includes("tương tác")) {
+              bonusCode = "KHONG_GIAN_DOC";
+            } else {
+              bonusCode = `BONUS_${bonusItems.length + 1}`;
+            }
+
+            const cleanBonusName = rawTitle.replace(/^\d+\.\s*/, "").trim();
+            const score = parseFloat(rawScore) || 1.0;
+
+            bonusItems.push({
+              id: `bonus_${bonusCode.toLowerCase()}`,
+              code: bonusCode,
+              name: cleanBonusName,
+              base_points: score,
+              unit: bonusCode === "DAT_GIAI" ? "học sinh / giải thưởng" : bonusCode === "MO_HINH" ? "mô hình" : "lần",
+              max_points: 5.0,
+              evidence_guidelines: rawEvidence,
+              sort_order: bonusItems.length + 1,
+              is_active: true,
+            });
+          }
+        }
+      });
+
+      setDetectedBonusList(bonusItems.length > 0 ? bonusItems : DEFAULT_BONUS_CRITERIA);
+    } else {
+      // ── PARSER 2: MẪU KỸ THUẬT CHI TIẾT ──
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber <= headerRowIndex) return;
+
+        const getCellVal = (colIndex: number) => {
+          const cell = row.getCell(colIndex);
+          const text = extractCellText(cell.value);
+          if (text) return text;
+          if (cell.text && typeof cell.text === "string" && cell.text !== "[object Object]") {
+            return cell.text.trim();
+          }
+          return "";
+        };
+
+        const categoryCode = getCellVal(1);
+        const categoryName = getCellVal(2);
+        let criterionCode = getCellVal(3);
+        const criterionTitle = getCellVal(4);
+        const description = getCellVal(5);
+        const scoringGuidelines = getCellVal(6);
+        const maxScoreRaw = getCellVal(7);
+        const reqDoc1Raw = getCellVal(8).toUpperCase();
+        const reqDoc2Raw = getCellVal(9).toUpperCase();
+        const reqLink3Raw = getCellVal(10).toUpperCase();
+        const responsibleUnit = getCellVal(11);
+        const deadline = getCellVal(12);
+        const displayOrderRaw = getCellVal(13);
+
+        if (!criterionCode && !criterionTitle) return;
+
+        const existingRow = rows.find(
+          (r) => r.criterionCode.toLowerCase() === criterionCode.toLowerCase()
+        );
+
+        if (existingRow) {
+          const normOld = existingRow.criterionTitle.toLowerCase().replace(/\s+/g, " ");
+          const normNew = criterionTitle.toLowerCase().replace(/\s+/g, " ");
+          if (normOld === normNew) {
+            skippedDuplicatesCount++;
+            return;
+          }
+          let letterCode = "a";
+          let newCode = `${criterionCode}${letterCode}`;
+          while (codesSeen.has(newCode.toLowerCase())) {
+            letterCode = String.fromCharCode(letterCode.charCodeAt(0) + 1);
+            newCode = `${criterionCode}${letterCode}`;
+          }
+          criterionCode = newCode;
+          codesSeen.add(criterionCode.toLowerCase());
+        } else if (criterionCode) {
+          codesSeen.add(criterionCode.toLowerCase());
+        }
+
+        const errors: string[] = [];
+        if (!criterionCode) {
+          errors.push("Thiếu mã tiêu chí (Criterion_Code)");
+        }
+        if (!criterionTitle) {
+          errors.push("Thiếu nội dung tiêu chí");
+        }
+
+        const maxScore = parseFloat(maxScoreRaw);
+        if (isNaN(maxScore) || maxScore <= 0) {
+          errors.push("Điểm tối đa phải là số dương lớn hơn 0");
+        }
+
+        if (errors.length > 0) foundErrors = true;
+
+        rows.push({
+          rowIndex: rowNumber,
+          categoryCode,
+          categoryName: categoryName || "Chung",
+          criterionCode,
+          criterionTitle,
+          description,
+          scoringGuidelines,
+          maxScore: isNaN(maxScore) ? 0 : maxScore,
+          reqDoc1: reqDoc1Raw === "TRUE" || reqDoc1Raw === "1",
+          reqDoc2: reqDoc2Raw === "TRUE" || reqDoc2Raw === "1",
+          reqLink3: reqLink3Raw === "TRUE" || reqLink3Raw === "1",
+          responsibleUnit,
+          deadline,
+          displayOrder: parseInt(displayOrderRaw) || rows.length + 1,
+          errors,
+        });
+      });
+    }
+
+    setPreviewRows(rows);
+    setHasErrors(foundErrors);
+
+    if (rows.length === 0) {
+      toast.error("Trang tính này không tìm thấy dòng tiêu chí nào.");
+    } else if (foundErrors) {
+      toast.warning(`Đã đọc ${rows.length} tiêu chí nhưng có một số dòng chưa hợp lệ.`);
+    } else {
+      if (skippedDuplicatesCount > 0) {
+        toast.success(`Đọc thành công ${rows.length} tiêu chí (đã tự động lọc bỏ ${skippedDuplicatesCount} dòng trùng lặp)!`);
+      } else {
+        toast.success(`Đọc thành công ${rows.length} tiêu chí từ file Excel!`);
+      }
+    }
+  };
+
+  // ============================================================
+  // File Upload & Sheet Change Handlers
   // ============================================================
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -348,331 +723,77 @@ export default function ImportExportPage() {
       const arrayBuffer = await file.arrayBuffer();
       await workbook.xlsx.load(arrayBuffer);
 
-      // Search all worksheets or pick the first with data
-      let worksheet = workbook.worksheets[0];
-      for (const ws of workbook.worksheets) {
-        if (ws.rowCount > 5) {
-          worksheet = ws;
+      setWorkbookRef(workbook);
+      const sheets = workbook.worksheets.map((ws) => ws.name);
+      setAvailableSheets(sheets);
+      setSelectedSheetIndex(0);
+
+      // Search worksheet with data
+      let targetWs = workbook.worksheets[0];
+      for (let i = 0; i < workbook.worksheets.length; i++) {
+        if (workbook.worksheets[i].rowCount > 5) {
+          targetWs = workbook.worksheets[i];
+          setSelectedSheetIndex(i);
           break;
         }
       }
 
-      if (!worksheet) {
+      if (!targetWs) {
         throw new Error("File Excel không có trang tính nào chứa dữ liệu.");
       }
 
-      // Detect format by scanning first 12 rows
-      let headerRowIndex = -1;
-      let isDoiFramework = false;
-      let colTT = -1;
-      let colCategory = -1;
-      let colTitle = -1;
-      let colScore = -1;
-      let colEvidence = -1;
-
-      for (let r = 1; r <= Math.min(15, worksheet.rowCount); r++) {
-        const row = worksheet.getRow(r);
-        let hasTitle = false;
-        let hasScore = false;
-        let hasCategoryOrTT = false;
-
-        row.eachCell((cell, colNumber) => {
-          const val = extractCellText(cell.value).toLowerCase();
-          if (val === "criterion_code" || val === "criterion_title") {
-            // Technical format
-            headerRowIndex = r;
-            isDoiFramework = false;
-          }
-          if (val.includes("nội dung thực hiện") || val.includes("nội dung")) {
-            hasTitle = true;
-            colTitle = colNumber;
-          }
-          if (val === "điểm" || val.includes("điểm")) {
-            hasScore = true;
-            colScore = colNumber;
-          }
-          if (val === "tiêu chí" || val.includes("tiêu chí") || val === "tt" || val === "stt") {
-            hasCategoryOrTT = true;
-            if (val.includes("tiêu chí")) colCategory = colNumber;
-            if (val === "tt" || val === "stt") colTT = colNumber;
-          }
-          if (val.includes("minh chứng") || val.includes("yêu cầu")) {
-            colEvidence = colNumber;
-          }
-        });
-
-        if (hasTitle && (hasScore || hasCategoryOrTT)) {
-          headerRowIndex = r;
-          isDoiFramework = true;
-          break;
-        }
-        if (headerRowIndex !== -1 && !isDoiFramework) break;
-      }
-
-      if (headerRowIndex === -1) {
-        throw new Error(
-          "Không tìm thấy dòng tiêu đề bảng tiêu chí trong file. Vui lòng đảm bảo file có các cột: 'Tiêu chí', 'Nội dung thực hiện', 'Điểm', 'Yêu cầu minh chứng'."
-        );
-      }
-
-      setDetectedFormat(isDoiFramework ? "doi_framework" : "technical");
-
-      const rows: ImportRow[] = [];
-      const bonusItems: BonusCriterion[] = [];
-      const codesSeen = new Set<string>();
-      let foundErrors = false;
-
-      // ── PARSER 1: MẪU KHUNG TIÊU CHÍ CÔNG TÁC ĐỘI (Thực tế) ──
-      if (isDoiFramework) {
-        let currentCategoryName = "Chung";
-        let inBonusSection = false;
-        let categoryCount = 0;
-        let autoCriterionNum = 1;
-
-        worksheet.eachRow((row, rowNumber) => {
-          if (rowNumber <= headerRowIndex) return;
-
-          const getCellVal = (col: number) => {
-            if (col <= 0) return "";
-            const cell = row.getCell(col);
-            const text = extractCellText(cell.value);
-            if (text) return text;
-            if (cell.text && typeof cell.text === "string" && cell.text !== "[object Object]") {
-              return cell.text.trim();
-            }
-            return "";
-          };
-
-          const rawCategory = getCellVal(colCategory);
-          const rawTitle = getCellVal(colTitle);
-          const rawScore = getCellVal(colScore);
-          const rawEvidence = getCellVal(colEvidence);
-          const fullRowText = [rawCategory, rawTitle, rawScore, rawEvidence].join(" ").toLowerCase();
-
-          // Check if this row enters the Bonus section
-          if (
-            fullRowText.includes("điểm thưởng") ||
-            fullRowText.includes("** điểm thưởng") ||
-            rawCategory.toUpperCase().includes("ĐIỂM THƯỞNG")
-          ) {
-            inBonusSection = true;
-            // Skip the section heading row if it has no specific bonus content
-            if (!rawTitle || rawTitle.toLowerCase().includes("điểm thưởng")) {
-              return;
-            }
-          }
-
-          // Check for summary or note rows to skip
-          if (
-            fullRowText.startsWith("tổng") ||
-            fullRowText.startsWith("tổng điểm") ||
-            fullRowText.includes("ghi chú:") ||
-            fullRowText.includes("xếp loại thi đua")
-          ) {
-            return;
-          }
-
-          // Empty row
-          if (!rawTitle && !rawCategory && !rawScore) return;
-
-          // Carry forward merged category
-          if (rawCategory && !inBonusSection) {
-            // Strip any numeric prefix like "1. ", "2. " and normalize line breaks
-            currentCategoryName = rawCategory
-              .replace(/^\d+\.\s*/, "")
-              .replace(/\r?\n+/g, " ")
-              .replace(/\s+/g, " ")
-              .trim();
-            categoryCount++;
-          }
-
-          // Process normal criteria row
-          if (!inBonusSection) {
-            if (!rawTitle) return; // Skip rows without criterion content
-
-            // Extract Criterion Code: look for "1.1", "2.1", "3.13", etc.
-            let criterionCode = "";
-            let cleanTitle = rawTitle;
-
-            const codeMatch = rawTitle.match(/^(\d+\.\d+)/);
-            if (codeMatch) {
-              criterionCode = codeMatch[1];
-              cleanTitle = rawTitle.replace(/^\d+\.\d+\.?\s*/, "").trim();
-            } else {
-              // Generate code if missing (e.g. 5.1, 6.1)
-              const catNumber = rawCategory.match(/^(\d+)/)?.[1] || String(categoryCount || 1);
-              criterionCode = `${catNumber}.${autoCriterionNum++}`;
-            }
-
-            // Parse score
-            let maxScore = parseFloat(rawScore);
-            if (isNaN(maxScore)) {
-              // Try to find first number in score cell
-              const numMatch = rawScore.match(/\d+(\.\d+)?/);
-              maxScore = numMatch ? parseFloat(numMatch[0]) : 0;
-            }
-
-            const errors: string[] = [];
-            if (codesSeen.has(criterionCode.toLowerCase())) {
-              errors.push(`Trùng mã tiêu chí: "${criterionCode}"`);
-            } else {
-              codesSeen.add(criterionCode.toLowerCase());
-            }
-
-            if (!cleanTitle) {
-              errors.push("Nội dung tiêu chí trống");
-            }
-            if (maxScore <= 0) {
-              errors.push("Điểm tối đa không hợp lệ (phải > 0)");
-            }
-
-            if (errors.length > 0) foundErrors = true;
-
-            rows.push({
-              rowIndex: rowNumber,
-              categoryCode: `CAT_${categoryCount || 1}`,
-              categoryName: currentCategoryName,
-              criterionCode,
-              criterionTitle: cleanTitle,
-              description: rawEvidence || "Thực hiện theo chỉ đạo của Hội đồng Đội",
-              scoringGuidelines: rawEvidence,
-              maxScore: maxScore || 1.0,
-              reqDoc1: true,
-              reqDoc2: true,
-              reqLink3: true,
-              responsibleUnit: "Liên đội",
-              deadline: "",
-              displayOrder: rows.length + 1,
-              errors,
-            });
-          } else {
-            // In Bonus section: extract bonus items
-            if (rawTitle && rawTitle.length > 5) {
-              // Skip section header rows like "** ĐIỂM THƯỞNG (5 điểm)"
-              if (rawTitle.toLowerCase().includes("điểm thưởng") && rawTitle.length < 35) {
-                return;
-              }
-
-              let bonusCode = "BONUS_OTHER";
-              if (rawTitle.toLowerCase().includes("mô hình") || rawTitle.toLowerCase().includes("sáng tạo")) {
-                bonusCode = "MO_HINH";
-              } else if (rawTitle.toLowerCase().includes("đạt giải") || rawTitle.toLowerCase().includes("cuộc thi")) {
-                bonusCode = "DAT_GIAI";
-              } else if (rawTitle.toLowerCase().includes("trung ương") || rawTitle.toLowerCase().includes("tỉnh chọn cử")) {
-                bonusCode = "CAP_TW";
-              } else if (rawTitle.toLowerCase().includes("đăng cai") || rawTitle.toLowerCase().includes("hỗ trợ tổ chức")) {
-                bonusCode = "DANG_CAI";
-              } else if (rawTitle.toLowerCase().includes("không gian đọc sách") || rawTitle.toLowerCase().includes("tương tác")) {
-                bonusCode = "KHONG_GIAN_DOC";
-              } else {
-                bonusCode = `BONUS_${bonusItems.length + 1}`;
-              }
-
-              const cleanBonusName = rawTitle.replace(/^\d+\.\s*/, "").trim();
-              const score = parseFloat(rawScore) || 1.0;
-
-              bonusItems.push({
-                id: `bonus_${bonusCode.toLowerCase()}`,
-                code: bonusCode,
-                name: cleanBonusName,
-                base_points: score,
-                unit: bonusCode === "DAT_GIAI" ? "học sinh / giải thưởng" : bonusCode === "MO_HINH" ? "mô hình" : "lần",
-                max_points: 5.0,
-                evidence_guidelines: rawEvidence,
-                sort_order: bonusItems.length + 1,
-                is_active: true,
-              });
-            }
-          }
-        });
-
-        setDetectedBonusList(bonusItems.length > 0 ? bonusItems : DEFAULT_BONUS_CRITERIA);
-      } else {
-        // ── PARSER 2: MẪU KỸ THUẬT CHI TIẾT ──
-        worksheet.eachRow((row, rowNumber) => {
-          if (rowNumber <= headerRowIndex) return;
-
-          const getCellVal = (colIndex: number) => {
-            const cell = row.getCell(colIndex);
-            const text = extractCellText(cell.value);
-            if (text) return text;
-            if (cell.text && typeof cell.text === "string" && cell.text !== "[object Object]") {
-              return cell.text.trim();
-            }
-            return "";
-          };
-
-          const categoryCode = getCellVal(1);
-          const categoryName = getCellVal(2);
-          const criterionCode = getCellVal(3);
-          const criterionTitle = getCellVal(4);
-          const description = getCellVal(5);
-          const scoringGuidelines = getCellVal(6);
-          const maxScoreRaw = getCellVal(7);
-          const reqDoc1Raw = getCellVal(8).toUpperCase();
-          const reqDoc2Raw = getCellVal(9).toUpperCase();
-          const reqLink3Raw = getCellVal(10).toUpperCase();
-          const responsibleUnit = getCellVal(11);
-          const deadline = getCellVal(12);
-          const displayOrderRaw = getCellVal(13);
-
-          if (!criterionCode && !criterionTitle) return;
-
-          const errors: string[] = [];
-          if (!criterionCode) {
-            errors.push("Thiếu mã tiêu chí (Criterion_Code)");
-          } else if (codesSeen.has(criterionCode.toLowerCase())) {
-            errors.push(`Trùng mã tiêu chí trong file: "${criterionCode}"`);
-          } else {
-            codesSeen.add(criterionCode.toLowerCase());
-          }
-
-          if (!criterionTitle) {
-            errors.push("Thiếu nội dung tiêu chí");
-          }
-
-          const maxScore = parseFloat(maxScoreRaw);
-          if (isNaN(maxScore) || maxScore <= 0) {
-            errors.push("Điểm tối đa phải là số dương lớn hơn 0");
-          }
-
-          if (errors.length > 0) foundErrors = true;
-
-          rows.push({
-            rowIndex: rowNumber,
-            categoryCode,
-            categoryName: categoryName || "Chung",
-            criterionCode,
-            criterionTitle,
-            description,
-            scoringGuidelines,
-            maxScore: isNaN(maxScore) ? 0 : maxScore,
-            reqDoc1: reqDoc1Raw === "TRUE" || reqDoc1Raw === "1",
-            reqDoc2: reqDoc2Raw === "TRUE" || reqDoc2Raw === "1",
-            reqLink3: reqLink3Raw === "TRUE" || reqLink3Raw === "1",
-            responsibleUnit,
-            deadline,
-            displayOrder: parseInt(displayOrderRaw) || rows.length + 1,
-            errors,
-          });
-        });
-      }
-
-      setPreviewRows(rows);
-      setHasErrors(foundErrors);
-
-      if (rows.length === 0) {
-        toast.error("File Excel không tìm thấy dòng tiêu chí nào.");
-      } else if (foundErrors) {
-        toast.warning(`Đã đọc ${rows.length} tiêu chí nhưng có một số dòng chưa hợp lệ.`);
-      } else {
-        toast.success(`Đọc thành công ${rows.length} tiêu chí từ file Excel!`);
-      }
+      parseWorksheet(targetWs);
     } catch (err: any) {
       toast.error("Lỗi khi đọc file: " + err.message);
     } finally {
       setParsing(false);
     }
+  };
+
+  const handleSelectSheet = (sheetIndex: number) => {
+    if (!workbookRef || !workbookRef.worksheets[sheetIndex]) return;
+    setSelectedSheetIndex(sheetIndex);
+    try {
+      parseWorksheet(workbookRef.worksheets[sheetIndex]);
+    } catch (err: any) {
+      toast.error("Lỗi khi đọc trang tính: " + err.message);
+    }
+  };
+
+  // ============================================================
+  // Inline Code Editing & Real-time Validation
+  // ============================================================
+  const handleUpdateRowCode = (rowIndex: number, newCode: string) => {
+    setPreviewRows((prev) => {
+      const updated = prev.map((r) => {
+        if (r.rowIndex === rowIndex) {
+          return { ...r, criterionCode: newCode.trim() };
+        }
+        return r;
+      });
+
+      const codeCounts = new Map<string, number>();
+      updated.forEach((r) => {
+        const c = r.criterionCode.toLowerCase();
+        codeCounts.set(c, (codeCounts.get(c) || 0) + 1);
+      });
+
+      let hasErr = false;
+      const revalidated = updated.map((r) => {
+        const c = r.criterionCode.toLowerCase();
+        const errs = r.errors.filter((e) => !e.startsWith("Trùng mã tiêu chí"));
+        if ((codeCounts.get(c) || 0) > 1) {
+          errs.push(`Trùng mã tiêu chí: "${r.criterionCode}"`);
+          hasErr = true;
+        }
+        if (!r.criterionTitle) hasErr = true;
+        if (r.maxScore <= 0) hasErr = true;
+        return { ...r, errors: errs };
+      });
+
+      setHasErrors(hasErr);
+      return revalidated;
+    });
   };
 
   // ============================================================
@@ -891,6 +1012,32 @@ export default function ImportExportPage() {
                     </div>
                   )}
                 </div>
+
+                {availableSheets.length > 1 && (
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 mt-3 pt-3 border-t border-emerald-100">
+                    <span className="text-xs font-bold text-slate-900 shrink-0">
+                      Chọn trang tính (Sheet):
+                    </span>
+                    <Select
+                      value={String(selectedSheetIndex)}
+                      onValueChange={(val) => handleSelectSheet(parseInt(val))}
+                    >
+                      <SelectTrigger className="h-8 text-xs font-bold bg-white border-emerald-300 w-full sm:w-auto min-w-[220px] rounded-lg">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[50vh]">
+                        {availableSheets.map((name, idx) => (
+                          <SelectItem key={name} value={String(idx)} className="text-xs font-medium">
+                            {name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      (File có {availableSheets.length} trang tính)
+                    </span>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -984,7 +1131,13 @@ export default function ImportExportPage() {
                         >
                           <TableCell className="font-mono text-xs text-slate-500">{row.rowIndex}</TableCell>
                           <TableCell className="font-mono text-xs font-bold text-slate-950">
-                            {row.criterionCode}
+                            <Input
+                              type="text"
+                              value={row.criterionCode}
+                              onChange={(e) => handleUpdateRowCode(row.rowIndex, e.target.value)}
+                              className="h-7 w-20 font-mono text-xs font-bold bg-white border border-slate-300 rounded px-1.5 py-0.5 text-center focus:border-emerald-500"
+                              title="Nhấp để sửa mã tiêu chí nếu cần"
+                            />
                           </TableCell>
                           <TableCell className="text-xs font-bold text-slate-800">
                             {row.categoryName}
