@@ -33,7 +33,7 @@ export default async function handler(req: any, res: any) {
   try {
     const {
       recipientUserIds = [],
-      title = "Công tác Đoàn - Thông báo",
+      title = "Công tác Đội - Thông báo",
       message = "Bạn có thông báo mới từ hệ thống.",
       url = "/",
       broadcast = false,

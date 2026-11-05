@@ -149,7 +149,7 @@ export default function AdminDashboardPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Tổng quan</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Bảng điều khiển quản trị trung tâm hệ thống đánh giá công tác Đoàn
+          Bảng điều khiển quản trị trung tâm hệ thống đánh giá công tác Đội
         </p>
       </div>
 
@@ -158,7 +158,7 @@ export default function AdminDashboardPage() {
         <KpiCard
           title="Tổng đơn vị"
           value={isLoading ? "—" : stats?.totalOrgs ?? 0}
-          description="Đoàn cơ sở đang hoạt động"
+          description="Liên đội đang hoạt động"
           icon={<Building2 className="h-5 w-5" />}
           color="text-blue-600"
           onClick={() => navigate("/admin/organizations")}

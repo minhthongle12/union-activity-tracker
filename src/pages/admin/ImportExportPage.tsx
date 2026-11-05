@@ -93,8 +93,8 @@ export default function ImportExportPage() {
       Category_Code: "CAT02",
       Category_Name: "Phong trào Tình nguyện",
       Criterion_Code: "2.1",
-      Criterion_Title: "Đoàn xã, phường đồng loạt tổ chức Ngày Chủ nhật xanh",
-      Description: "Tham gia các đợt ra quân Chủ nhật xanh toàn quốc",
+      Criterion_Title: "Liên đội đồng loạt tổ chức Ngày hội Thiếu nhi vui khỏe - Tiến bước lên Đoàn",
+      Description: "Tham gia các đợt ra quân và phong trào Đội",
       Scoring_Guidelines: "1 điểm / mỗi đợt có báo cáo và hình ảnh",
       Max_Score: 4.0,
       Requires_Doc1: "TRUE",
@@ -610,7 +610,7 @@ export default function ImportExportPage() {
                   <div>
                     <CardTitle className="text-base">Xuất kết quả đánh giá</CardTitle>
                     <CardDescription>
-                      Xuất điểm số và tiến độ thẩm định của các Đoàn cơ sở theo đợt đánh giá.
+                      Xuất điểm số và tiến độ thẩm định của các Liên đội theo đợt đánh giá.
                     </CardDescription>
                   </div>
                 </div>

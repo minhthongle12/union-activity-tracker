@@ -1,7 +1,7 @@
 {
-  "name": "Hệ thống Quản lý Công tác Đoàn",
-  "short_name": "Công tác Đoàn",
-  "description": "Hệ thống đánh giá tiêu chí, nộp minh chứng và quản lý thi đua công tác Đoàn",
+  "name": "Hệ thống Quản lý Công tác Đội",
+  "short_name": "Công tác Đội",
+  "description": "Hệ thống đánh giá tiêu chí, nộp minh chứng và quản lý thi đua công tác Đội",
   "start_url": "/",
   "id": "/",
   "scope": "/",
@@ -37,8 +37,8 @@
       "purpose": "maskable"
     },
     {
-      "src": "/huy-hieu-doan.png",
-      "sizes": "425x468",
+      "src": "/huy-hieu-doi.png",
+      "sizes": "430x464",
       "type": "image/png",
       "purpose": "any"
     }

@@ -128,7 +128,7 @@ export default function ReportsPage() {
 
       // Title banner
       sheet.mergeCells("A1:I1");
-      sheet.getCell("A1").value = "HỆ THỐNG QUẢN LÝ TIÊU CHÍ & MINH CHỨNG CÔNG TÁC ĐOÀN";
+      sheet.getCell("A1").value = "HỆ THỐNG QUẢN LÝ TIÊU CHÍ & MINH CHỨNG CÔNG TÁC ĐỘI";
       sheet.getCell("A1").font = { name: "Arial", size: 12, bold: true, color: { argb: "FF1E3A8A" } };
       sheet.getCell("A1").alignment = { vertical: "middle", horizontal: "center" };
 
@@ -148,7 +148,7 @@ export default function ReportsPage() {
       const headerRow = sheet.addRow([
         "Hạng",
         "Mã đơn vị",
-        "Tên Đoàn cơ sở",
+        "Tên Liên đội",
         "Tiêu chí đã nộp",
         "Tiêu chí đã duyệt",
         "Điểm tiêu chí",
@@ -256,7 +256,7 @@ export default function ReportsPage() {
             Báo cáo & thống kê
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Tổng hợp kết quả thi đua, xếp hạng Đoàn cơ sở và xuất báo cáo tổng kết
+            Tổng hợp kết quả thi đua, xếp hạng Liên đội và xuất báo cáo tổng kết
           </p>
         </div>
 
@@ -321,10 +321,10 @@ export default function ReportsPage() {
       {/* Print-only official header */}
       <div className="hidden print:block text-center space-y-1 mb-6">
         <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">
-          ĐOÀN TNCS HỒ CHÍ MINH
+          ĐỘI TNTP HỒ CHÍ MINH
         </p>
         <h2 className="text-lg font-bold text-slate-900 uppercase">
-          BẢNG TỔNG HỢP KẾT QUẢ XẾP HẠNG THI ĐUA CÔNG TÁC ĐOÀN
+          BẢNG TỔNG HỢP KẾT QUẢ XẾP HẠNG THI ĐUA CÔNG TÁC ĐỘI
         </h2>
         <p className="text-sm font-medium text-slate-700">
           Đợt đánh giá: {currentPeriod?.name || "Tất cả"}
@@ -363,7 +363,7 @@ export default function ReportsPage() {
                   <TableRow>
                     {showRanking && <TableHead className="w-[80px] text-center">Hạng</TableHead>}
                     <TableHead className="w-[100px]">Mã đơn vị</TableHead>
-                    <TableHead>Tên Đoàn cơ sở</TableHead>
+                    <TableHead>Tên Liên đội</TableHead>
                     <TableHead className="w-[120px] text-center">Đã nộp</TableHead>
                     <TableHead className="w-[130px] text-center">Đã xác thực</TableHead>
                     <TableHead className="w-[120px] text-center">Điểm tiêu chí</TableHead>

@@ -3,7 +3,7 @@ import { ChevronRight, Home } from "lucide-react";
 
 const routeNames: Record<string, string> = {
   admin: "Quản trị",
-  user: "Đoàn cơ sở",
+  user: "Liên đội",
   organizations: "Quản lý đơn vị",
   users: "Quản lý tài khoản",
   periods: "Đợt đánh giá",

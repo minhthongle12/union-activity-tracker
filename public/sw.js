@@ -1,12 +1,12 @@
 // Service Worker for Browser Web Push Notifications & PWA Offline Shell
-// HỆ THỐNG QUẢN LÝ TIÊU CHÍ & MINH CHỨNG CÔNG TÁC ĐOÀN
+// HỆ THỐNG QUẢN LÝ TIÊU CHÍ & MINH CHỨNG CÔNG TÁC ĐỘI
 
-const CACHE_NAME = "doan-tncs-pwa-v1";
+const CACHE_NAME = "doi-tntp-pwa-v1";
 const STATIC_ASSETS = [
   "/",
   "/index.html",
   "/manifest.json",
-  "/huy-hieu-doan.png",
+  "/huy-hieu-doi.png",
   "/icon-192.png",
   "/icon-512.png",
   "/favicon.png",
@@ -90,11 +90,11 @@ self.addEventListener("push", (event) => {
 
   try {
     const payload = event.data.json();
-    const title = payload.title || "Công tác Đoàn - Thông báo";
+    const title = payload.title || "Công tác Đội - Thông báo";
     const options = {
       body: payload.message || "Bạn có thông báo mới từ hệ thống.",
-      icon: "/huy-hieu-doan.png",
-      badge: "/huy-hieu-doan.png",
+      icon: "/huy-hieu-doi.png",
+      badge: "/huy-hieu-doi.png",
       data: {
         url: payload.url || "/",
       },
@@ -102,11 +102,11 @@ self.addEventListener("push", (event) => {
 
     event.waitUntil(self.registration.showNotification(title, options));
   } catch (e) {
-    const title = "Công tác Đoàn - Thông báo";
+    const title = "Công tác Đội - Thông báo";
     const options = {
       body: event.data.text(),
-      icon: "/huy-hieu-doan.png",
-      badge: "/huy-hieu-doan.png",
+      icon: "/huy-hieu-doi.png",
+      badge: "/huy-hieu-doi.png",
     };
     event.waitUntil(self.registration.showNotification(title, options));
   }

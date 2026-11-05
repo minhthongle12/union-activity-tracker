@@ -273,7 +273,7 @@ export default function UsersPage() {
   });
 
   const roleLabel = (role: UserRole) =>
-    role === "admin" ? "Quản trị viên" : "Đoàn cơ sở";
+    role === "admin" ? "Quản trị viên" : "Liên đội";
 
   return (
     <div className="space-y-6">
@@ -309,7 +309,7 @@ export default function UsersPage() {
           <SelectContent>
             <SelectItem value="all">Tất cả vai trò</SelectItem>
             <SelectItem value="admin">Quản trị viên</SelectItem>
-            <SelectItem value="user">Đoàn cơ sở</SelectItem>
+            <SelectItem value="user">Liên đội</SelectItem>
           </SelectContent>
         </Select>
         <Select value={filterOrg} onValueChange={setFilterOrg}>
@@ -481,7 +481,7 @@ export default function UsersPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="user">Đoàn cơ sở</SelectItem>
+                  <SelectItem value="user">Liên đội</SelectItem>
                   <SelectItem value="admin">Quản trị viên</SelectItem>
                 </SelectContent>
               </Select>

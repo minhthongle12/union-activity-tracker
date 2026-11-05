@@ -225,7 +225,7 @@ export default function AdminBonusPage() {
             Quản lý điểm cộng
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Xem xét và phê duyệt các yêu cầu cộng điểm thi đua từ các đơn vị Đoàn cơ sở
+            Xem xét và phê duyệt các yêu cầu cộng điểm thi đua từ các đơn vị Liên đội
           </p>
         </div>
 
@@ -281,7 +281,7 @@ export default function AdminBonusPage() {
                       <span className="font-semibold text-slate-900 text-base">{item.title}</span>
                       <Badge variant="outline" className="text-xs gap-1 bg-slate-50">
                         <Building className="h-3 w-3 text-blue-600" />
-                        {item.organization?.name || "Đoàn cơ sở"}
+                        {item.organization?.name || "Liên đội"}
                       </Badge>
                       {item.period?.name && (
                         <Badge variant="outline" className="text-xs gap-1 bg-blue-50 text-blue-700 border-blue-200">

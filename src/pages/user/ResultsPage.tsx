@@ -143,7 +143,7 @@ export default function UserResultsPage() {
         </h1>
         <p className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
           <Building className="h-4 w-4" />
-          Đơn vị: <b className="text-slate-800">{profile?.display_name || "Đoàn cơ sở"}</b>
+          Đơn vị: <b className="text-slate-800">{profile?.display_name || "Liên đội"}</b>
           <span>•</span>
           <span>{period?.name || "Kỳ đánh giá"}</span>
         </p>

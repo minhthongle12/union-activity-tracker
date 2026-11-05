@@ -705,7 +705,7 @@ export default function CriteriaPage() {
                 <Label htmlFor="c-unit">Đơn vị / Ban phụ trách</Label>
                 <Input
                   id="c-unit"
-                  placeholder="VD: Ban Tuyên giáo, Đoàn xã..."
+                  placeholder="VD: Hội đồng Đội, Ban Thiếu nhi, Tổng phụ trách..."
                   className="mt-1"
                   value={criterionForm.responsible_unit}
                   onChange={(e) => setCriterionForm({ ...criterionForm, responsible_unit: e.target.value })}

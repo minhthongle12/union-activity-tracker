@@ -184,7 +184,7 @@ export default function OrganizationsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Quản lý đơn vị</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Quản lý danh sách các Đoàn cơ sở tham gia đánh giá
+            Quản lý danh sách các Liên đội tham gia đánh giá
           </p>
         </div>
         <Button onClick={openCreate} className="shrink-0">
@@ -291,8 +291,8 @@ export default function OrganizationsPage() {
             </DialogTitle>
             <DialogDescription>
               {editing
-                ? "Cập nhật thông tin đơn vị Đoàn cơ sở."
-                : "Nhập thông tin đơn vị Đoàn cơ sở mới."}
+                ? "Cập nhật thông tin đơn vị Liên đội."
+                : "Nhập thông tin đơn vị Liên đội mới."}
             </DialogDescription>
           </DialogHeader>
 
@@ -303,7 +303,7 @@ export default function OrganizationsPage() {
               </Label>
               <Input
                 id="org-code"
-                placeholder="VD: DCS01"
+                placeholder="VD: LD01"
                 className="col-span-3"
                 value={form.code}
                 onChange={(e) => setForm({ ...form, code: e.target.value })}
@@ -315,7 +315,7 @@ export default function OrganizationsPage() {
               </Label>
               <Input
                 id="org-name"
-                placeholder="Tên đơn vị Đoàn cơ sở"
+                placeholder="Tên đơn vị Liên đội (VD: Liên đội THCS...)"
                 className="col-span-3"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}

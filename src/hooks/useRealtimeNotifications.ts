@@ -61,9 +61,9 @@ export function useRealtimeNotifications() {
             Notification.permission === "granted"
           ) {
             try {
-              new Notification(newNotif.title || "Công tác Đoàn", {
+              new Notification(newNotif.title || "Công tác Đội", {
                 body: newNotif.message,
-                icon: "/huy-hieu-doan.png",
+                icon: "/huy-hieu-doi.png",
               });
             } catch (err) {
               console.warn("Lỗi kích hoạt thông báo cục bộ:", err);

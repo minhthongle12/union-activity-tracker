@@ -50,13 +50,13 @@ export default function LoginPage() {
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center h-20 w-20 rounded-full bg-white shadow-md p-1.5 mb-4 border border-slate-200">
             <img
-              src="/huy-hieu-doan.png"
-              alt="Huy hiệu Đoàn TNCS Hồ Chí Minh"
+              src="/huy-hieu-doi.png"
+              alt="Huy hiệu Đội TNTP Hồ Chí Minh"
               className="h-full w-full object-contain"
             />
           </div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Hệ thống Quản lý Công tác Đoàn
+            Hệ thống Quản lý Công tác Đội
           </h1>
           <p className="text-sm text-slate-500 mt-1">
             Quản lý tiêu chí & minh chứng đánh giá
@@ -132,7 +132,7 @@ export default function LoginPage() {
         </Card>
 
         <p className="text-center text-xs text-slate-400 mt-6">
-          © 2026 Hệ thống Quản lý Công tác Đoàn
+          © 2026 Hệ thống Quản lý Công tác Đội
         </p>
       </div>
     </div>

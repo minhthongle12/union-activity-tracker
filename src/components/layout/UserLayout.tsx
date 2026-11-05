@@ -92,13 +92,13 @@ export function UserLayout() {
         <div className="h-16 px-4 flex items-center justify-between border-b border-slate-800 bg-slate-950">
           <div className="flex items-center gap-2.5">
             <img
-              src="/huy-hieu-doan.png"
-              alt="Huy hiệu Đoàn"
+              src="/huy-hieu-doi.png"
+              alt="Huy hiệu Đội"
               className="h-8 w-8 object-contain shrink-0 drop-shadow"
             />
             <div className="flex flex-col">
               <span className="font-semibold text-sm tracking-wide text-white leading-tight">
-                ĐOÀN CƠ SỞ
+                LIÊN ĐỘI
               </span>
               <span className="text-[10px] text-slate-400">Đánh giá & Minh chứng</span>
             </div>
@@ -114,7 +114,7 @@ export function UserLayout() {
         {/* Navigation list */}
         <div className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
           <div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-            Menu Đoàn viên
+            Menu Liên đội
           </div>
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -145,12 +145,12 @@ export function UserLayout() {
           <div className="flex items-center gap-2">
             <Avatar className="h-8 w-8 border border-slate-700 bg-slate-800 text-white">
               <AvatarFallback className="bg-blue-900 text-xs font-medium text-blue-200">
-                {profile?.display_name ? profile.display_name.slice(0, 2).toUpperCase() : "ĐS"}
+                {profile?.display_name ? profile.display_name.slice(0, 2).toUpperCase() : "LĐ"}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold text-white truncate">
-                {profile?.display_name || "Đoàn cơ sở"}
+                {profile?.display_name || "Liên đội"}
               </p>
               <Badge variant="outline" className="text-[10px] py-0 px-1 border-slate-700 text-blue-300">
                 <Building className="h-3 w-3 mr-0.5 inline" /> Đơn vị
@@ -202,11 +202,11 @@ export function UserLayout() {
                 <Button variant="ghost" className="flex items-center gap-2 pl-2 pr-3 h-9">
                   <Avatar className="h-7 w-7 bg-blue-700 text-white text-xs">
                     <AvatarFallback className="bg-blue-700 text-white">
-                      {profile?.display_name ? profile.display_name.slice(0, 2).toUpperCase() : "ĐS"}
+                      {profile?.display_name ? profile.display_name.slice(0, 2).toUpperCase() : "LĐ"}
                     </AvatarFallback>
                   </Avatar>
                   <span className="text-sm font-medium text-slate-700 hidden sm:inline">
-                    {profile?.display_name || "Đoàn cơ sở"}
+                    {profile?.display_name || "Liên đội"}
                   </span>
                 </Button>
               </DropdownMenuTrigger>

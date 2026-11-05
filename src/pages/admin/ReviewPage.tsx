@@ -613,7 +613,7 @@ export default function ReviewPage() {
               Thẩm định & xác thực
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Chọn đợt đánh giá để xem danh sách tiêu chí, thẩm định hồ sơ minh chứng và chấm điểm cho các đơn vị Đoàn cơ sở
+              Chọn đợt đánh giá để xem danh sách tiêu chí, thẩm định hồ sơ minh chứng và chấm điểm cho các đơn vị Liên đội
             </p>
           </div>
         </div>
@@ -801,7 +801,7 @@ export default function ReviewPage() {
       <Card className="border-slate-200 shadow-2xs">
         <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <span className="text-xs font-semibold text-slate-700 block mb-1">Đoàn cơ sở</span>
+            <span className="text-xs font-semibold text-slate-700 block mb-1">Liên đội</span>
             <Select value={selectedOrgId} onValueChange={setSelectedOrgId}>
               <SelectTrigger>
                 <SelectValue placeholder="Tất cả đơn vị" />
@@ -1284,7 +1284,7 @@ function AdminUnitGradingDetail({
         {/* Self score info */}
         <div className="space-y-3 text-slate-800">
           <div className="grid grid-cols-12 gap-2">
-            <div className="col-span-5 font-bold text-slate-700">Đoàn cơ sở:</div>
+            <div className="col-span-5 font-bold text-slate-700">Liên đội:</div>
             <div className="col-span-7 font-medium text-slate-900">
               {unit.organization.name} ({unit.organization.code})
             </div>

@@ -89,7 +89,7 @@ export default function UserAccountPage() {
           Thông tin tài khoản
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Quản lý thông tin cá nhân và cài đặt bảo mật cho tài khoản Đoàn cơ sở
+          Quản lý thông tin cá nhân và cài đặt bảo mật cho tài khoản Liên đội
         </p>
       </div>
 
@@ -99,7 +99,7 @@ export default function UserAccountPage() {
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
             <Avatar className="h-16 w-16 bg-blue-600 text-white text-lg font-bold">
               <AvatarFallback className="bg-blue-700 text-white">
-                {profile?.display_name ? profile.display_name.slice(0, 2).toUpperCase() : "ĐS"}
+                {profile?.display_name ? profile.display_name.slice(0, 2).toUpperCase() : "LĐ"}
               </AvatarFallback>
             </Avatar>
             <div className="space-y-1">
@@ -107,7 +107,7 @@ export default function UserAccountPage() {
                 <h3 className="text-lg font-bold text-slate-900">{profile?.display_name}</h3>
                 <Badge variant="outline" className="text-blue-700 border-blue-200 bg-blue-50">
                   <Building className="h-3 w-3 mr-1" />
-                  Đoàn cơ sở
+                  Liên đội
                 </Badge>
               </div>
               <p className="text-xs font-mono text-muted-foreground">
@@ -203,7 +203,7 @@ export default function UserAccountPage() {
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="h-12 w-12 rounded-xl bg-white p-1 flex items-center justify-center shrink-0 shadow">
-                <img src="/huy-hieu-doan.png" alt="Huy hiệu Đoàn" className="h-full w-full object-contain" />
+                <img src="/huy-hieu-doi.png" alt="Huy hiệu Đội" className="h-full w-full object-contain" />
               </div>
               <div>
                 <h4 className="font-semibold text-base text-white flex items-center gap-2">

@@ -91,14 +91,14 @@ export function PWAInstallPrompt() {
           <div className="flex items-center gap-3">
             <div className="h-11 w-11 rounded-xl bg-white p-1 flex items-center justify-center shrink-0 shadow-md">
               <img
-                src="/huy-hieu-doan.png"
-                alt="Huy hiệu Đoàn"
+                src="/huy-hieu-doi.png"
+                alt="Huy hiệu Đội"
                 className="h-full w-full object-contain"
               />
             </div>
             <div>
               <h4 className="font-semibold text-sm text-white flex items-center gap-1.5">
-                Cài đặt ứng dụng Công tác Đoàn
+                Cài đặt ứng dụng Công tác Đội
               </h4>
               <p className="text-xs text-slate-300 mt-0.5 line-clamp-2">
                 Trải nghiệm mượt mà như app gốc, mở nhanh và nhận thông báo tức thì.

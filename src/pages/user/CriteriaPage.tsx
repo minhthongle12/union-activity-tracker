@@ -265,7 +265,7 @@ export default function UserCriteriaPage() {
             Bộ tiêu chí đánh giá
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Đánh giá công tác Đoàn và nộp minh chứng
+            Đánh giá công tác Đội và nộp minh chứng
           </p>
         </div>
         <Card className="border-amber-200 bg-amber-50/70 p-6">
@@ -273,10 +273,10 @@ export default function UserCriteriaPage() {
             <AlertCircle className="h-6 w-6 text-amber-600 shrink-0 mt-0.5" />
             <div className="space-y-1">
               <h3 className="text-base font-bold text-amber-900">
-                Tài khoản chưa được liên kết với Đơn vị Đoàn cơ sở
+                Tài khoản chưa được liên kết với Đơn vị Liên đội
               </h3>
               <p className="text-xs text-amber-800">
-                Tài khoản của bạn hiện chưa được phân bổ vào Đơn vị Đoàn cơ sở nào. Theo quy định, người dùng cơ sở cần được gắn vào một Đơn vị để nhận bài nộp và nộp minh chứng.
+                Tài khoản của bạn hiện chưa được phân bổ vào Đơn vị Liên đội nào. Theo quy định, người dùng cơ sở cần được gắn vào một Đơn vị để nhận bài nộp và nộp minh chứng.
               </p>
               <p className="text-xs text-amber-900 font-semibold pt-1">
                 👉 Vui lòng liên hệ Quản trị viên hệ thống để được gán đơn vị (trong mục "Quản lý tài khoản" của Admin).
@@ -415,7 +415,7 @@ export default function UserCriteriaPage() {
         const crit = criteriaItems.find((i) => i.criterion.id === criterionId);
         const adminIds = adminUsers.map((a) => a.id);
         const title = `Đơn vị nộp minh chứng tiêu chí ${crit?.criterion.code_snapshot || ""}`;
-        const message = `${profile.display_name || "Đoàn cơ sở"} vừa nộp minh chứng tiêu chí "${crit?.criterion.title_snapshot || ""}". Tự chấm: ${selfScore}đ.`;
+        const message = `${profile.display_name || "Liên đội"} vừa nộp minh chứng tiêu chí "${crit?.criterion.title_snapshot || ""}". Tự chấm: ${selfScore}đ.`;
 
         await supabase.from("notifications").insert(
           adminUsers.map((a) => ({
@@ -532,7 +532,7 @@ export default function UserCriteriaPage() {
             </h1>
             <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
               <Building className="h-4 w-4 text-blue-700" />
-              Đơn vị: <b className="text-slate-800">{profile?.display_name || "Đoàn cơ sở"}</b>
+              Đơn vị: <b className="text-slate-800">{profile?.display_name || "Liên đội"}</b>
               <span className="text-slate-300 hidden sm:inline">•</span>
               <span className="text-slate-500">
                 Chọn đợt để xem bộ tiêu chí, tự chấm điểm và nộp minh chứng
@@ -740,7 +740,7 @@ export default function UserCriteriaPage() {
         </h1>
         <p className="text-sm text-muted-foreground flex items-center gap-1.5">
           <Building className="h-4 w-4" />
-          Đơn vị: <b className="text-slate-800">{profile?.display_name || "Đoàn cơ sở"}</b>
+          Đơn vị: <b className="text-slate-800">{profile?.display_name || "Liên đội"}</b>
         </p>
       </div>
 

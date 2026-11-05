@@ -155,7 +155,7 @@ export default function AdminNotificationsPage() {
             Quản lý thông báo
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Gửi thông báo nhắc nhở, thông tri hoặc chỉ đạo công tác Đoàn đến các đơn vị
+            Gửi thông báo nhắc nhở, thông tri hoặc chỉ đạo công tác Đội đến các đơn vị
           </p>
         </div>
 
@@ -267,7 +267,7 @@ export default function AdminNotificationsPage() {
                   <SelectValue placeholder="Chọn đơn vị nhận" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tất cả các Đoàn cơ sở</SelectItem>
+                  <SelectItem value="all">Tất cả các Liên đội</SelectItem>
                   {(orgs ?? []).map((o) => (
                     <SelectItem key={o.id} value={o.id}>
                       {o.code} – {o.name}

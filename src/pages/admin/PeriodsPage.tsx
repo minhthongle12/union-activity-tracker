@@ -421,7 +421,7 @@ export default function PeriodsPage() {
           throw new Error("Đợt đánh giá phải có ít nhất 1 tiêu chí được chọn trước khi mở.");
         }
         if (details.orgs.length === 0) {
-          throw new Error("Đợt đánh giá phải gán ít nhất 1 đơn vị Đoàn cơ sở trước khi mở.");
+          throw new Error("Đợt đánh giá phải gán ít nhất 1 đơn vị Liên đội trước khi mở.");
         }
       }
 
@@ -457,7 +457,7 @@ export default function PeriodsPage() {
               users.map((u) => ({
                 recipient_id: u.id,
                 title: "Đợt đánh giá mới đã chính thức mở",
-                message: `Đợt đánh giá "${periodInfo?.name || "Công tác Đoàn"}" đã mở tiếp nhận minh chứng. Hạn nộp: ${periodInfo?.submission_deadline ? new Date(periodInfo.submission_deadline).toLocaleDateString("vi-VN") : "theo quy định"}.`,
+                message: `Đợt đánh giá "${periodInfo?.name || "Công tác Đội"}" đã mở tiếp nhận minh chứng. Hạn nộp: ${periodInfo?.submission_deadline ? new Date(periodInfo.submission_deadline).toLocaleDateString("vi-VN") : "theo quy định"}.`,
                 type: "period_opened",
                 link_url: "/user/criteria",
               }))
@@ -466,7 +466,7 @@ export default function PeriodsPage() {
             triggerPushNotification({
               recipientUserIds: users.map((u) => u.id),
               title: "Đợt đánh giá mới đã chính thức mở",
-              message: `Đợt đánh giá "${periodInfo?.name || "Công tác Đoàn"}" đã mở tiếp nhận minh chứng.`,
+              message: `Đợt đánh giá "${periodInfo?.name || "Công tác Đội"}" đã mở tiếp nhận minh chứng.`,
               url: "/user/criteria",
             });
           }
@@ -633,7 +633,7 @@ export default function PeriodsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Quản lý đợt đánh giá</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Thiết lập các đợt thi đua, kỳ đánh giá công tác Đoàn theo năm hoặc chuyên đề
+            Thiết lập các đợt thi đua, kỳ đánh giá công tác Đội theo năm hoặc chuyên đề
           </p>
         </div>
         <Button onClick={openCreate} className="shrink-0">
@@ -811,7 +811,7 @@ export default function PeriodsPage() {
             <DialogDescription className="text-xs text-slate-500">
               {editingPeriod
                 ? "Cập nhật thông tin thời gian, kế hoạch triển khai của đợt đánh giá."
-                : "Thiết lập đợt thi đua, chọn Đoàn cơ sở tham gia và chọn các nhóm tiêu chí áp dụng."}
+                : "Thiết lập đợt thi đua, chọn Liên đội tham gia và chọn các nhóm tiêu chí áp dụng."}
             </DialogDescription>
           </DialogHeader>
 
@@ -822,7 +822,7 @@ export default function PeriodsPage() {
               </Label>
               <Input
                 id="p-name"
-                placeholder="VD: Đánh giá công tác Đoàn năm 2026"
+                placeholder="VD: Đánh giá công tác Đội năm học 2025 - 2026"
                 className="mt-1 text-xs sm:text-sm h-9 sm:h-10"
                 value={periodForm.name}
                 onChange={(e) => setPeriodForm({ ...periodForm, name: e.target.value })}
@@ -891,7 +891,7 @@ export default function PeriodsPage() {
                         className="text-xs gap-1.5 data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-xs"
                       >
                         <Building2 className="h-3.5 w-3.5" />
-                        Đoàn cơ sở ({createSelectedOrgIds.length}/{allOrgs?.length || 0})
+                        Liên đội ({createSelectedOrgIds.length}/{allOrgs?.length || 0})
                       </TabsTrigger>
                       <TabsTrigger
                         value="criteria"
@@ -914,13 +914,13 @@ export default function PeriodsPage() {
                     </div>
                   </div>
 
-                  {/* TAB 1: ĐOÀN CƠ SỞ THAM GIA */}
+                  {/* TAB 1: LIÊN ĐỘI THAM GIA */}
                   <TabsContent value="orgs" className="mt-3 space-y-2.5 focus-visible:outline-none">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div className="relative flex-1 max-w-sm">
                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                         <Input
-                          placeholder="Tìm kiếm mã hoặc tên đoàn cơ sở..."
+                          placeholder="Tìm kiếm mã hoặc tên liên đội..."
                           value={orgSearch}
                           onChange={(e) => setOrgSearch(e.target.value)}
                           className="pl-8 h-8 text-xs bg-white"
@@ -951,7 +951,7 @@ export default function PeriodsPage() {
                     <div className="border border-slate-200 rounded-lg bg-white max-h-56 overflow-y-auto p-2">
                       {filteredOrgs.length === 0 ? (
                         <div className="text-center py-6 text-xs text-muted-foreground">
-                          {orgSearch ? "Không tìm thấy đoàn cơ sở phù hợp." : "Chưa có danh sách đơn vị."}
+                          {orgSearch ? "Không tìm thấy liên đội phù hợp." : "Chưa có danh sách đơn vị."}
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
@@ -1173,7 +1173,7 @@ export default function PeriodsPage() {
                       }
                     />
                     <span className="font-medium text-emerald-800">
-                      Kích hoạt mở đợt ngay lập tức (cho phép các Đoàn cơ sở được chọn nộp minh chứng ngay)
+                      Kích hoạt mở đợt ngay lập tức (cho phép các Liên đội được chọn nộp minh chứng ngay)
                     </span>
                   </label>
                 </div>
@@ -1193,7 +1193,7 @@ export default function PeriodsPage() {
                 }
                 if (!editingPeriod) {
                   if (createSelectedOrgIds.length === 0) {
-                    toast.error("Vui lòng chọn ít nhất 1 Đoàn cơ sở tham gia đợt đánh giá.");
+                    toast.error("Vui lòng chọn ít nhất 1 Liên đội tham gia đợt đánh giá.");
                     return;
                   }
                   if (createSelectedCriteriaIds.length === 0) {
@@ -1375,7 +1375,7 @@ export default function PeriodsPage() {
             <TabsContent value="orgs" className="flex-1 flex flex-col overflow-hidden space-y-3 mt-3">
               <div className="flex items-center justify-between">
                 <p className="text-xs text-muted-foreground">
-                  Chọn các Đoàn cơ sở được giao nộp bài trong đợt này:
+                  Chọn các Liên đội được giao nộp bài trong đợt này:
                 </p>
                 {configPeriod?.status === "draft" && (
                   <div className="flex gap-2">

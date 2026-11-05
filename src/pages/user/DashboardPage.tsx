@@ -135,7 +135,7 @@ export default function UserDashboardPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            Xin chào, {profile?.display_name || "Đoàn cơ sở"}
+            Xin chào, {profile?.display_name || "Liên đội"}
           </h1>
           <p className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
             <Building className="h-4 w-4 text-blue-600" />

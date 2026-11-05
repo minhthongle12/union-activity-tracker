@@ -775,7 +775,7 @@ export function UnifiedCriteriaAccordion({
             <div>
               <Label className="text-xs">Tiêu đề / Tên liên kết</Label>
               <Input
-                placeholder="VD: Bài viết ra quân trên Fanpage Đoàn"
+                placeholder="VD: Bài viết hoạt động trên Fanpage / Bảng tin Liên đội"
                 value={linkTitle}
                 onChange={(e) => setLinkTitle(e.target.value)}
                 className="mt-1"
