@@ -786,7 +786,7 @@ export default function ReviewPage() {
                           }}
                           disabled={isExporting}
                           className="h-9 w-full sm:w-auto text-xs font-bold text-emerald-800 border-emerald-300 hover:bg-emerald-50 rounded-xl gap-1.5 shrink-0"
-                          title="Xuất bảng điểm thẩm định của toàn bộ các trường theo mẫu Excel chính thức"
+                          title="Xuất Excel"
                         >
                           <Download className="h-3.5 w-3.5" />
                           <span>Xuất Excel</span>
@@ -834,20 +834,17 @@ export default function ReviewPage() {
             onClick={handleExportExcel}
             disabled={isExporting}
             className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs h-9 rounded-xl gap-2 shadow-sm"
+            title="Xuất Excel"
           >
             {isExporting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Đang xuất file...</span>
+                <span>Đang xuất Excel...</span>
               </>
             ) : (
               <>
                 <FileSpreadsheet className="h-4 w-4" />
-                <span>
-                  {selectedOrgId !== "all"
-                    ? `Xuất Excel (${organizations?.find((o) => o.id === selectedOrgId)?.name?.replace(/^Liên\s+độ?i\s+(Trường\s+)?/i, "") || "Liên đội"})`
-                    : "Xuất toàn bộ Liên đội (Excel)"}
-                </span>
+                <span>Xuất Excel</span>
               </>
             )}
           </Button>
