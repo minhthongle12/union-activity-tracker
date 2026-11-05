@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { triggerPushNotification } from "@/lib/push";
+import { notifyUsers } from "@/lib/notificationService";
+import { recordAuditLog } from "@/lib/auditLog";
 import type { BonusRequest, BonusStatus, Organization, EvaluationPeriod } from "@/types/database";
 import {
   BonusCriterion,
@@ -205,16 +207,17 @@ export default function AdminBonusPage() {
         comment: actionComment || null,
       });
 
-      // Audit log
-      await supabase.from("audit_logs").insert({
-        actor_id: profile?.id || null,
+      // Audit log with device info
+      await recordAuditLog({
+        actorId: profile?.id,
         action: `BONUS_${actionType.toUpperCase()}`,
-        entity_type: "bonus_request",
-        entity_id: selectedReq.id,
-        new_values: { status, approved_score: finalScore, comment: actionComment },
+        entityType: "bonus_requests",
+        entityId: selectedReq.id,
+        summary: `Hội đồng ${actionType === "approve" ? "duyệt" : actionType === "reject" ? "từ chối" : "yêu cầu bổ sung"} điểm thưởng: "${selectedReq.title}" (${finalScore}đ)`,
+        details: { status, approved_score: finalScore, comment: actionComment },
       });
 
-      // Send in-app notification to organization users
+      // Send notification to organization users
       if (selectedReq.organization_period_id) {
         const { data: op } = await supabase
           .from("organization_periods")
@@ -223,39 +226,24 @@ export default function AdminBonusPage() {
           .maybeSingle();
 
         if (op?.organization_id) {
-          const { data: orgUsers } = await supabase
-            .from("profiles")
-            .select("id")
-            .eq("organization_id", op.organization_id);
-
-          if (orgUsers && orgUsers.length > 0) {
-            let notifTitle = `Điểm thưởng đã được duyệt (+${finalScore}đ)`;
-            let notifType = "bonus_approved";
-            if (actionType === "reject") {
-              notifTitle = `Hồ sơ điểm thưởng không được duyệt`;
-              notifType = "bonus_rejected";
-            } else if (actionType === "revision") {
-              notifTitle = `Yêu cầu bổ sung minh chứng điểm thưởng`;
-              notifType = "bonus_revision";
-            }
-
-            await supabase.from("notifications").insert(
-              orgUsers.map((u) => ({
-                recipient_id: u.id,
-                title: notifTitle,
-                message: `Hồ sơ "${selectedReq.title}": ${actionComment || (actionType === "approve" ? "Đã được Hội đồng Đội thẩm định phê duyệt" : "Xem chi tiết trong mục Điểm thưởng")}`,
-                type: notifType,
-                link_url: "/user/bonus",
-              }))
-            );
-
-            triggerPushNotification({
-              recipientUserIds: orgUsers.map((u) => u.id),
-              title: notifTitle,
-              message: `Hồ sơ "${selectedReq.title}": ${actionComment || (actionType === "approve" ? "Đã được phê duyệt" : "Xem chi tiết")}`,
-              url: "/user/bonus",
-            });
+          let notifTitle = `Điểm thưởng đã được duyệt (+${finalScore}đ)`;
+          let notifType = "bonus_approved";
+          if (actionType === "reject") {
+            notifTitle = `Hồ sơ điểm thưởng không được duyệt`;
+            notifType = "bonus_rejected";
+          } else if (actionType === "revision") {
+            notifTitle = `Yêu cầu bổ sung minh chứng điểm thưởng`;
+            notifType = "bonus_revision";
           }
+
+          await notifyUsers({
+            organizationIds: [op.organization_id],
+            title: notifTitle,
+            message: `Hồ sơ "${selectedReq.title}": ${actionComment || (actionType === "approve" ? "Đã được Hội đồng Đội thẩm định phê duyệt" : "Xem chi tiết trong mục Điểm thưởng")}`,
+            type: notifType,
+            relatedId: selectedReq.id,
+            url: "/user/bonus",
+          });
         }
       }
     },

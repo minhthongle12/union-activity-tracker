@@ -1,6 +1,8 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { notifyUsers } from "@/lib/notificationService";
+import { recordAuditLog } from "@/lib/auditLog";
 import type {
   CriterionLibrary,
   CriteriaCategory,
@@ -162,9 +164,38 @@ export default function CriteriaPage() {
           .update(payload)
           .eq("id", editingCriterion.id);
         if (error) throw error;
+
+        await recordAuditLog({
+          action: "UPDATE_CRITERION",
+          entityType: "criteria_library",
+          entityId: editingCriterion.id,
+          summary: `Cập nhật tiêu chí: [${payload.code}] ${payload.title}`,
+          details: { code: payload.code, title: payload.title, max_score: payload.max_score },
+        });
       } else {
-        const { error } = await supabase.from("criteria_library").insert(payload);
+        const { data: newCrit, error } = await supabase
+          .from("criteria_library")
+          .insert(payload)
+          .select()
+          .single();
         if (error) throw error;
+
+        // Notify users
+        await notifyUsers({
+          title: "Ban hành tiêu chí thi đua mới",
+          message: `Hội đồng Đội xã ban hành tiêu chí mới: [${payload.code}] ${payload.title} (${payload.max_score}đ).`,
+          type: "CRITERION_CREATED",
+          relatedId: newCrit?.id,
+          url: "/user/criteria",
+        });
+
+        await recordAuditLog({
+          action: "CREATE_CRITERION",
+          entityType: "criteria_library",
+          entityId: newCrit?.id,
+          summary: `Thêm tiêu chí mới: [${payload.code}] ${payload.title} (${payload.max_score}đ)`,
+          details: { code: payload.code, title: payload.title, max_score: payload.max_score },
+        });
       }
     },
     onSuccess: () => {

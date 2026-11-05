@@ -4,6 +4,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { triggerPushNotification } from "@/lib/push";
+import { notifyUsers } from "@/lib/notificationService";
+import { recordAuditLog } from "@/lib/auditLog";
 import type {
   EvaluationPeriod,
   PeriodStatus,
@@ -377,31 +379,29 @@ export default function PeriodsPage() {
 
           // Send notification to users of selected organizations
           if (values.autoActivate) {
-            const { data: users } = await supabase
-              .from("profiles")
-              .select("id")
-              .in("organization_id", createSelectedOrgIds)
-              .eq("role", "user");
-
-            if (users && users.length > 0) {
-              await supabase.from("notifications").insert(
-                users.map((u) => ({
-                  recipient_id: u.id,
-                  title: "Đợt đánh giá mới đã chính thức mở",
-                  message: `Đợt đánh giá "${newPeriod.name}" đã mở tiếp nhận minh chứng.`,
-                  type: "period_opened",
-                  link_url: "/user/criteria",
-                }))
-              );
-
-              triggerPushNotification({
-                recipientUserIds: users.map((u) => u.id),
-                title: "Đợt đánh giá mới đã chính thức mở",
-                message: `Đợt đánh giá "${newPeriod.name}" đã mở tiếp nhận minh chứng.`,
-                url: "/user/criteria",
-              });
-            }
+            await notifyUsers({
+              organizationIds: createSelectedOrgIds,
+              title: "Đợt đánh giá mới đã chính thức mở",
+              message: `Hội đồng Đội xã phát động đợt đánh giá "${newPeriod.name}". Hạn nộp minh chứng: ${newPeriod.submission_deadline ? new Date(newPeriod.submission_deadline).toLocaleDateString("vi-VN") : "theo quy định"}.`,
+              type: "period_opened",
+              relatedId: newPeriod.id,
+              url: "/user/criteria",
+            });
           }
+
+          await recordAuditLog({
+            action: "CREATE_PERIOD",
+            entityType: "evaluation_periods",
+            entityId: newPeriod.id,
+            summary: `Tạo đợt đánh giá mới: "${newPeriod.name}"`,
+            details: {
+              name: newPeriod.name,
+              start_at: newPeriod.start_at,
+              submission_deadline: newPeriod.submission_deadline,
+              criteria_count: createSelectedCriteriaIds.length,
+              org_count: createSelectedOrgIds.length,
+            },
+          });
         }
       }
     },
@@ -445,38 +445,28 @@ export default function PeriodsPage() {
           .eq("period_id", periodId);
 
         const orgIds = (orgPeriods ?? []).map((op) => op.organization_id);
-        if (orgIds.length > 0) {
-          const { data: users } = await supabase
-            .from("profiles")
-            .select("id")
-            .in("organization_id", orgIds)
-            .eq("role", "user");
 
-          if (users && users.length > 0) {
-            const { data: periodInfo } = await supabase
-              .from("evaluation_periods")
-              .select("name, submission_deadline")
-              .eq("id", periodId)
-              .single();
+        const { data: periodInfo } = await supabase
+          .from("evaluation_periods")
+          .select("name, submission_deadline")
+          .eq("id", periodId)
+          .single();
 
-            await supabase.from("notifications").insert(
-              users.map((u) => ({
-                recipient_id: u.id,
-                title: "Đợt đánh giá mới đã chính thức mở",
-                message: `Đợt đánh giá "${periodInfo?.name || "Công tác Đội"}" đã mở tiếp nhận minh chứng. Hạn nộp: ${periodInfo?.submission_deadline ? new Date(periodInfo.submission_deadline).toLocaleDateString("vi-VN") : "theo quy định"}.`,
-                type: "period_opened",
-                link_url: "/user/criteria",
-              }))
-            );
+        await notifyUsers({
+          organizationIds: orgIds,
+          title: "Đợt đánh giá mới đã chính thức mở",
+          message: `Đợt đánh giá "${periodInfo?.name || "Công tác Đội"}" đã mở tiếp nhận minh chứng. Hạn nộp: ${periodInfo?.submission_deadline ? new Date(periodInfo.submission_deadline).toLocaleDateString("vi-VN") : "theo quy định"}.`,
+          type: "period_opened",
+          relatedId: periodId,
+          url: "/user/criteria",
+        });
 
-            triggerPushNotification({
-              recipientUserIds: users.map((u) => u.id),
-              title: "Đợt đánh giá mới đã chính thức mở",
-              message: `Đợt đánh giá "${periodInfo?.name || "Công tác Đội"}" đã mở tiếp nhận minh chứng.`,
-              url: "/user/criteria",
-            });
-          }
-        }
+        await recordAuditLog({
+          action: "ACTIVATE_PERIOD",
+          entityType: "evaluation_periods",
+          entityId: periodId,
+          summary: `Mở tiếp nhận minh chứng đợt đánh giá "${periodInfo?.name || ""}"`,
+        });
       }
     },
     onSuccess: () => {

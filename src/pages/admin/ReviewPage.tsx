@@ -54,6 +54,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getEvidenceSignedUrl } from "@/lib/storage";
 import { exportReviewExcel } from "@/lib/exportReviewExcel";
+import { notifyUsers } from "@/lib/notificationService";
+import { recordAuditLog } from "@/lib/auditLog";
 
 // ============================================================
 // Types
@@ -465,39 +467,25 @@ export default function ReviewPage() {
         comment: comment || "Đã thẩm định đạt yêu cầu",
       });
 
-      // Insert audit log
-      await supabase.from("audit_logs").insert({
-        actor_id: profile?.id || null,
+      // Insert audit log with device info
+      await recordAuditLog({
+        actorId: profile?.id,
         action: "VERIFY_CRITERION",
-        entity_type: "submission",
-        entity_id: subId,
-        new_values: { admin_score: officialScore, comment },
+        entityType: "submission",
+        entityId: subId,
+        summary: `Hội đồng xác thực tiêu chí [${criterion.code_snapshot}]: ${officialScore}đ`,
+        details: { admin_score: officialScore, comment },
       });
 
       // Notify organization users
-      const { data: orgUsers } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("organization_id", orgId);
-
-      if (orgUsers && orgUsers.length > 0) {
-        await supabase.from("notifications").insert(
-          orgUsers.map((u) => ({
-            recipient_id: u.id,
-            title: `Tiêu chí ${criterion.code_snapshot} đã được xác thực`,
-            message: `Hội đồng đã thẩm định tiêu chí "${criterion.title_snapshot}". Điểm chính thức: ${officialScore}đ.`,
-            type: "verified",
-            link_url: "/user/results",
-          }))
-        );
-
-        triggerPushNotification({
-          recipientUserIds: orgUsers.map((u) => u.id),
-          title: `Tiêu chí ${criterion.code_snapshot} đã được xác thực`,
-          message: `Hội đồng đã thẩm định tiêu chí "${criterion.title_snapshot}". Điểm chính thức: ${officialScore}đ.`,
-          url: "/user/results",
-        });
-      }
+      await notifyUsers({
+        organizationIds: [orgId],
+        title: `Tiêu chí ${criterion.code_snapshot} đã được xác thực`,
+        message: `Hội đồng đã thẩm định tiêu chí "${criterion.title_snapshot}". Điểm chính thức: ${officialScore}đ.`,
+        type: "verified",
+        relatedId: subId,
+        url: "/user/results",
+      });
 
       toast.success(`Đã xác thực và cho điểm cuối cùng (${officialScore}đ) thành công!`);
       refetch();
@@ -538,37 +526,23 @@ export default function ReviewPage() {
         comment,
       });
 
-      await supabase.from("audit_logs").insert({
-        actor_id: profile?.id || null,
+      await recordAuditLog({
+        actorId: profile?.id,
         action: "REQUEST_REVISION",
-        entity_type: "submission",
-        entity_id: submissionId,
-        new_values: { comment },
+        entityType: "submission",
+        entityId: submissionId,
+        summary: `Hội đồng yêu cầu bổ sung minh chứng tiêu chí [${criterion.code_snapshot}]`,
+        details: { comment },
       });
 
-      const { data: orgUsers } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("organization_id", orgId);
-
-      if (orgUsers && orgUsers.length > 0) {
-        await supabase.from("notifications").insert(
-          orgUsers.map((u) => ({
-            recipient_id: u.id,
-            title: `Yêu cầu bổ sung minh chứng tiêu chí ${criterion.code_snapshot}`,
-            message: `Ý kiến Hội đồng: ${comment}`,
-            type: "revision_requested",
-            link_url: "/user/criteria",
-          }))
-        );
-
-        triggerPushNotification({
-          recipientUserIds: orgUsers.map((u) => u.id),
-          title: `Yêu cầu bổ sung minh chứng tiêu chí ${criterion.code_snapshot}`,
-          message: `Ý kiến Hội đồng: ${comment}`,
-          url: "/user/criteria",
-        });
-      }
+      await notifyUsers({
+        organizationIds: [orgId],
+        title: `Yêu cầu bổ sung minh chứng tiêu chí ${criterion.code_snapshot}`,
+        message: `Ý kiến Hội đồng: ${comment}`,
+        type: "revision_requested",
+        relatedId: submissionId,
+        url: "/user/criteria",
+      });
 
       toast.warning("Đã gửi yêu cầu bổ sung minh chứng cho đơn vị!");
       refetch();

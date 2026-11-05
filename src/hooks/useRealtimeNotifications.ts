@@ -39,9 +39,17 @@ export function useRealtimeNotifications() {
           queryClient.invalidateQueries({ queryKey: ["user_notifications_list"] });
           queryClient.invalidateQueries({ queryKey: ["admin_notifications_list"] });
 
-          const targetUrl =
-            newNotif.link_url ||
-            (profile.role === "admin" ? "/admin/notifications" : "/user/notifications");
+          let targetUrl = profile.role === "admin" ? "/admin/notifications" : "/user/notifications";
+          if (profile.role === "admin") {
+            if (newNotif.type === "submission_received") targetUrl = "/admin/review";
+            else if (newNotif.type === "bonus_submitted") targetUrl = "/admin/bonus";
+          } else {
+            if (newNotif.type === "period_opened" || newNotif.type === "CRITERION_CREATED" || newNotif.type === "revision_requested") {
+              targetUrl = "/user/criteria";
+            } else if (newNotif.type === "verified") {
+              targetUrl = "/user/results";
+            }
+          }
 
           // 2. Hiển thị thông báo Toast trên màn hình
           toast.info(newNotif.title || "Thông báo mới", {

@@ -1,6 +1,8 @@
 import { useState, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { notifyUsers } from "@/lib/notificationService";
+import { recordAuditLog } from "@/lib/auditLog";
 import ExcelJS from "exceljs";
 import { saveBonusCriteriaList, DEFAULT_BONUS_CRITERIA, BonusCriterion } from "@/lib/bonusCriteria";
 import { Button } from "@/components/ui/button";
@@ -959,6 +961,27 @@ export default function ImportExportPage() {
           .filter((r) => r.errors.length > 0)
           .map((r) => ({ row: r.rowIndex, errors: r.errors })),
       });
+
+      // 6. Notify users & record audit log
+      if (validRows.length > 0) {
+        await notifyUsers({
+          title: "Bộ tiêu chí thi đua đã được cập nhật",
+          message: `Hội đồng Đội xã đã cập nhật bộ tiêu chí mới (${validRows.length} tiêu chí) vào hệ thống. Hãy kiểm tra và chuẩn bị minh chứng.`,
+          type: "CRITERIA_BULK_IMPORTED",
+          url: "/user/criteria",
+        });
+
+        await recordAuditLog({
+          action: "IMPORT_CRITERIA_EXCEL",
+          entityType: "criteria_library",
+          summary: `Nhập thành công ${validRows.length} tiêu chí từ file Excel "${fileName || "tải lên"}"`,
+          details: {
+            fileName,
+            totalRows: previewRows.length,
+            validRows: validRows.length,
+          },
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["criteria_library"] });

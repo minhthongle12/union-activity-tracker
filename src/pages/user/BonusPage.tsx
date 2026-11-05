@@ -4,6 +4,8 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { useGlobalLoading } from "@/contexts/LoadingContext";
 import { triggerPushNotification } from "@/lib/push";
+import { notifyAdmins } from "@/lib/notificationService";
+import { recordAuditLog } from "@/lib/auditLog";
 import type { BonusRequest, BonusStatus, EvaluationPeriod } from "@/types/database";
 import {
   BonusCriterion,
@@ -367,34 +369,43 @@ export default function UserBonusPage() {
         if (evError) console.error("Error inserting bonus evidence:", evError);
       }
 
-      // 3. Notify admins if submitted
+      // 3. Notify admins and record audit log with device info if submitted
       if (status === "submitted") {
-        try {
-          const { data: admins } = await supabase
-            .from("profiles")
-            .select("id")
-            .eq("role", "admin");
+        await notifyAdmins({
+          title: "Đề xuất điểm thưởng mới",
+          message: `Liên đội ${profile?.display_name || "đơn vị"} vừa gửi đề xuất điểm thưởng: "${form.title}" (+${form.requested_score} điểm).`,
+          type: "bonus_submitted",
+          relatedId: bonusData?.id,
+          url: "/admin/bonus",
+        });
 
-          if (admins && admins.length > 0) {
-            const notifs = admins.map((a) => ({
-              recipient_id: a.id,
-              title: "Đề xuất điểm thưởng mới",
-              message: `Liên đội ${profile?.display_name || "đơn vị"} vừa gửi đề xuất điểm thưởng: "${form.title}" (${form.requested_score} điểm).`,
-              type: "bonus",
-              link: "/admin/bonus",
-            }));
-            await supabase.from("notifications").insert(notifs);
-
-            triggerPushNotification({
-              recipientUserIds: admins.map((a) => a.id),
-              title: "Đề xuất điểm thưởng mới",
-              message: `Liên đội ${profile?.display_name || "đơn vị"} vừa đề xuất: "${form.title}" (+${form.requested_score}đ).`,
-              url: "/admin/bonus",
-            });
-          }
-        } catch (e) {
-          console.warn("Could not send admin notification:", e);
-        }
+        await recordAuditLog({
+          actorId: profile?.id,
+          action: "SUBMIT_BONUS",
+          entityType: "bonus_requests",
+          entityId: bonusData?.id,
+          summary: `${profile?.display_name || "Liên đội"} nộp đề xuất điểm thưởng: "${form.title}" (+${form.requested_score}đ)`,
+          details: {
+            title: form.title,
+            requested_score: form.requested_score,
+            bonus_code: form.bonus_code,
+            quantity: form.quantity,
+            unit: form.unit,
+            evidenceUrl: form.evidenceUrl,
+          },
+        });
+      } else {
+        await recordAuditLog({
+          actorId: profile?.id,
+          action: "DRAFT_BONUS",
+          entityType: "bonus_requests",
+          entityId: bonusData?.id,
+          summary: `${profile?.display_name || "Liên đội"} lưu nháp đề xuất điểm thưởng: "${form.title}"`,
+          details: {
+            title: form.title,
+            requested_score: form.requested_score,
+          },
+        });
       }
 
       return bonusData;

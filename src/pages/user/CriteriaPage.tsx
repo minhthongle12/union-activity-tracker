@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { useGlobalLoading } from "@/contexts/LoadingContext";
 import { triggerPushNotification } from "@/lib/push";
+import { notifyAdmins } from "@/lib/notificationService";
+import { recordAuditLog } from "@/lib/auditLog";
 import type {
   EvaluationPeriod,
   PeriodCriterion,
@@ -395,47 +397,35 @@ export default function UserCriteriaPage() {
       if (evErr) throw evErr;
     }
 
-    // 6. Record Audit Log
-    await supabase.from("audit_logs").insert({
-      actor_id: profile.id,
+    // 6. Record Audit Log with Device Information
+    const crit = criteriaItems.find((i) => i.criterion.id === criterionId);
+    await recordAuditLog({
+      actorId: profile.id,
       action: targetStatus === "submitted" ? "SUBMIT_CRITERION" : "SAVE_DRAFT_CRITERION",
-      entity_type: "submission",
-      entity_id: submissionId,
-      new_values: { self_score: selfScore, revision_number: nextRevNumber, evidence_count: evidence.length },
+      entityType: "submission",
+      entityId: submissionId,
+      summary: `${profile.display_name || "Liên đội"} ${targetStatus === "submitted" ? "nộp minh chứng" : "lưu nháp"} tiêu chí [${crit?.criterion.code_snapshot || ""}] (${selfScore}đ)`,
+      details: {
+        criterionCode: crit?.criterion.code_snapshot,
+        criterionTitle: crit?.criterion.title_snapshot,
+        self_score: selfScore,
+        revision_number: nextRevNumber,
+        evidence_count: evidence.length,
+      },
     });
 
     // 7. Notify Admins when submitted
     if (targetStatus === "submitted") {
-      const { data: adminUsers } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("role", "admin");
+      const title = `Liên đội nộp minh chứng: ${crit?.criterion.code_snapshot || ""}`;
+      const message = `${profile.display_name || "Liên đội"} vừa nộp minh chứng tiêu chí "${crit?.criterion.title_snapshot || ""}". Điểm tự chấm: ${selfScore}đ.`;
 
-      if (adminUsers && adminUsers.length > 0) {
-        const crit = criteriaItems.find((i) => i.criterion.id === criterionId);
-        const adminIds = adminUsers.map((a) => a.id);
-        const title = `Đơn vị nộp minh chứng tiêu chí ${crit?.criterion.code_snapshot || ""}`;
-        const message = `${profile.display_name || "Liên đội"} vừa nộp minh chứng tiêu chí "${crit?.criterion.title_snapshot || ""}". Tự chấm: ${selfScore}đ.`;
-
-        await supabase.from("notifications").insert(
-          adminUsers.map((a) => ({
-            recipient_id: a.id,
-            title,
-            message,
-            type: "submission_received",
-            link_url: "/admin/review",
-          }))
-        );
-
-        // Web Push Notification to Admins
-        await triggerPushNotification({
-          userIds: adminIds,
-          title,
-          body: message,
-          url: "/admin/review",
-          tag: `submission-${criterionId}`,
-        });
-      }
+      await notifyAdmins({
+        title,
+        message,
+        type: "submission_received",
+        relatedId: submissionId,
+        url: "/admin/review",
+      });
     }
   };
 

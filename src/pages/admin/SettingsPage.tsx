@@ -20,6 +20,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { recordAuditLog } from "@/lib/auditLog";
 
 export default function SettingsPage() {
   const { profile } = useAuth();
@@ -47,11 +48,12 @@ export default function SettingsPage() {
     localStorage.setItem("setting_max_file_size", maxFileSize.toString());
     localStorage.setItem("setting_auto_notify", autoNotifyReview.toString());
 
-    await supabase.from("audit_logs").insert({
-      actor_id: profile?.id || null,
+    await recordAuditLog({
+      actorId: profile?.id,
       action: "UPDATE_SYSTEM_SETTINGS",
-      entity_type: "settings",
-      new_values: { authorityName, maxFileSize, autoNotifyReview },
+      entityType: "settings",
+      summary: "Cập nhật tham số cài đặt hệ thống Hội đồng Đội",
+      details: { authorityName, maxFileSize, autoNotifyReview },
     });
 
     toast.success("Đã lưu các cài đặt hệ thống thành công!");
