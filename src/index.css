@@ -4,25 +4,25 @@
 
 @layer base {
   :root {
-    --background: 135 30% 98.5%;
-    --foreground: 155 35% 12%;
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%; /* #0f172a đen rõ nét, tương phản cao, dễ đọc */
     --card: 0 0% 100%;
-    --card-foreground: 155 35% 12%;
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 155 35% 12%;
-    --primary: 142 70% 36%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 142 72% 28%; /* Xanh lá mạ đậm đà (#15803d), sắc nét, nổi bật */
     --primary-foreground: 0 0% 100%;
-    --secondary: 138 35% 94%;
-    --secondary-foreground: 145 60% 20%;
-    --muted: 138 25% 95%;
-    --muted-foreground: 145 15% 42%;
-    --accent: 138 45% 92%;
-    --accent-foreground: 144 65% 20%;
+    --secondary: 138 25% 95%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 20% 96%;
+    --muted-foreground: 215 16% 40%; /* Chữ phụ sắc nét (#556987) */
+    --accent: 142 35% 93%;
+    --accent-foreground: 222 47% 11%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 140 20% 89%;
-    --input: 140 20% 89%;
-    --ring: 142 70% 38%;
+    --border: 140 20% 88%;
+    --input: 140 20% 88%;
+    --ring: 142 72% 28%;
     --radius: 0.875rem;
   }
 }
@@ -39,6 +39,6 @@
     @apply bg-background text-foreground font-sans antialiased;
     min-height: 100dvh;
     overscroll-behavior-y: none;
+    color: #0f172a; /* Mặc định chữ đen sắc nét toàn app */
   }
 }
-

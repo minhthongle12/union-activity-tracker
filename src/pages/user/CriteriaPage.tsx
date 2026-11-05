@@ -832,10 +832,10 @@ export default function UserCriteriaPage() {
                 <div className="flex items-start gap-3">
                   <AlertCircle className="h-5 w-5 text-emerald-700 shrink-0 mt-0.5" />
                   <div className="space-y-1 text-xs">
-                    <p className="font-semibold text-emerald-950 text-sm">
+                    <p className="font-bold text-slate-950 text-sm">
                       Đang hiển thị danh mục tiêu chí tham khảo ({libraryCriteria.length} tiêu chí gốc)
                     </p>
-                    <p className="text-emerald-800">
+                    <p className="text-slate-700 font-medium">
                       Đợt đánh giá này chưa được phân bổ tiêu chí hoặc Quản trị viên chưa cấu hình áp dụng tiêu chí cho đợt.
                     </p>
                   </div>
