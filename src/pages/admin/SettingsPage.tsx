@@ -85,7 +85,7 @@ export default function SettingsPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
-              <Settings className="h-5 w-5 text-blue-600" />
+              <Settings className="h-5 w-5 text-emerald-700" />
               <CardTitle className="text-base">Thông tin cơ quan chủ quản</CardTitle>
             </div>
             <CardDescription>
@@ -172,7 +172,7 @@ export default function SettingsPage() {
                 disabled={testingConnection}
               >
                 {testingConnection ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                  <Loader2 className="h-4 w-4 animate-spin text-emerald-700" />
                 ) : (
                   <RefreshCw className="h-4 w-4" />
                 )}

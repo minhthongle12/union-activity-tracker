@@ -531,7 +531,7 @@ export default function UserCriteriaPage() {
               Các đợt đánh giá thi đua
             </h1>
             <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
-              <Building className="h-4 w-4 text-blue-700" />
+              <Building className="h-4 w-4 text-emerald-700" />
               Đơn vị: <b className="text-slate-800">{profile?.display_name || "Liên đội"}</b>
               <span className="text-slate-300 hidden sm:inline">•</span>
               <span className="text-slate-500">
@@ -570,7 +570,7 @@ export default function UserCriteriaPage() {
         {/* Periods Grid (Newest first) */}
         {periodsLoading ? (
           <div className="p-12 text-center text-sm text-muted-foreground space-y-2 bg-white rounded-xl border">
-            <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-600" />
+            <Loader2 className="h-6 w-6 animate-spin mx-auto text-emerald-700" />
             <p>Đang tải danh sách các đợt đánh giá...</p>
           </div>
         ) : filteredPeriods.length === 0 ? (
@@ -624,7 +624,7 @@ export default function UserCriteriaPage() {
                   </div>
 
                   <div>
-                    <h3 className="font-bold text-slate-900 text-base leading-snug group-hover:text-blue-700 transition-colors">
+                    <h3 className="font-bold text-slate-900 text-base leading-snug group-hover:text-emerald-800 transition-colors">
                       {p.name}
                     </h3>
                     {p.description && (
@@ -716,44 +716,44 @@ export default function UserCriteriaPage() {
 
       {/* Page Header of Selected Period */}
       <div className="space-y-1">
-        <div className="flex items-center gap-2 text-sm text-blue-700 font-semibold flex-wrap">
+        <div className="flex items-center gap-2 text-sm text-emerald-800 font-bold flex-wrap">
           <Calendar className="h-4 w-4" />
           <span>{selectedPeriod.name}</span>
           <Badge
             className={cn(
-              "text-[11px] ml-1",
+              "text-[11px] ml-1 font-bold",
               selectedPeriod.status === "active"
-                ? "bg-emerald-600 text-white"
+                ? "bg-emerald-700 text-white"
                 : "bg-slate-200 text-slate-700"
             )}
           >
             {selectedPeriod.status === "active" ? "Đang mở nộp bài" : selectedPeriod.status}
           </Badge>
           {selectedPeriod.submission_deadline && (
-            <span className="text-xs text-slate-500 font-normal">
+            <span className="text-xs text-slate-600 font-medium">
               (Hạn nộp: {formatDateDisplay(selectedPeriod.submission_deadline)})
             </span>
           )}
         </div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+        <h1 className="text-2xl font-extrabold tracking-tight text-slate-950">
           Bộ tiêu chí đánh giá
         </h1>
-        <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-          <Building className="h-4 w-4" />
-          Đơn vị: <b className="text-slate-800">{profile?.display_name || "Liên đội"}</b>
+        <p className="text-sm text-slate-700 flex items-center gap-1.5 font-medium">
+          <Building className="h-4 w-4 text-emerald-700" />
+          Đơn vị: <b className="text-black font-bold">{profile?.display_name || "Liên đội"}</b>
         </p>
       </div>
 
       {/* KPI & Progress Top Cards */}
-      <Card className="border-slate-200 shadow-2xs">
+      <Card className="border-emerald-200 shadow-2xs rounded-2xl">
         <CardContent className="p-5 space-y-4">
           <div className="flex items-center justify-between text-sm">
-            <span className="font-semibold text-slate-800">
+            <span className="font-bold text-slate-950">
               Tiến độ hoàn thành minh chứng & nộp bài
             </span>
-            <span className="font-bold text-blue-700 text-base">{progressPercent}%</span>
+            <span className="font-black text-emerald-800 text-base">{progressPercent}%</span>
           </div>
-          <Progress value={progressPercent} className="h-2.5" />
+          <Progress value={progressPercent} className="h-2.5 bg-emerald-100" />
 
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2 text-xs">
             <div className="p-2.5 rounded-md bg-slate-50 border border-slate-100">

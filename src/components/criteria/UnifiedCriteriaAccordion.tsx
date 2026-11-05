@@ -357,7 +357,7 @@ export function UnifiedCriteriaAccordion({
                 Đã thẩm định
               </span>
             ) : status === "submitted" ? (
-              <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
+              <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-teal-50 text-teal-800 border border-teal-200">
                 Chờ xác thực
               </span>
             ) : status === "revision_requested" ? (
@@ -465,7 +465,7 @@ export function UnifiedCriteriaAccordion({
                       value={selfScore}
                       onChange={(e) => setSelfScore(parseFloat(e.target.value) || 0)}
                       className={cn(
-                        "w-16 h-8 text-center border border-slate-300 rounded font-semibold text-slate-900 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
+                        "w-16 h-8 text-center border border-slate-300 rounded font-semibold text-slate-900 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-600",
                         !isEditableUser && "bg-slate-50 text-slate-600"
                       )}
                     />
@@ -478,7 +478,7 @@ export function UnifiedCriteriaAccordion({
               {mode === "admin" && (
                 <div className="pt-4 border-t border-slate-200 space-y-3 bg-slate-50/80 p-3.5 rounded-lg mt-3">
                   <div className="flex items-center gap-1.5 font-bold text-slate-800 text-xs uppercase tracking-wide">
-                    <ShieldCheck className="h-4 w-4 text-blue-700" />
+                    <ShieldCheck className="h-4 w-4 text-emerald-700" />
                     Thẩm định & Chấm điểm (Admin)
                   </div>
 
@@ -572,8 +572,8 @@ export function UnifiedCriteriaAccordion({
 
               {/* Information banner when waiting for verification */}
               {mode === "user" && status === "submitted" && (
-                <div className="text-xs text-blue-700 bg-blue-50/80 p-2.5 rounded-md border border-blue-100 flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-blue-600 shrink-0" />
+                <div className="text-xs text-emerald-800 bg-emerald-50/80 p-2.5 rounded-md border border-emerald-200 flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-emerald-700 shrink-0" />
                   <span>Tiêu chí đang chờ thẩm định. Bạn có thể cập nhật minh chứng, sửa điểm và bấm lưu lại trước khi Hội đồng chấm điểm.</span>
                 </div>
               )}
@@ -995,7 +995,7 @@ function EvidenceSubCard({
                   <button
                     type="button"
                     onClick={() => onViewFile(ev)}
-                    className="font-medium text-slate-800 hover:text-blue-700 hover:underline px-2 py-0.5 text-xs rounded transition-colors"
+                    className="font-medium text-slate-800 hover:text-emerald-800 hover:underline px-2 py-0.5 text-xs rounded transition-colors"
                   >
                     Mở
                   </button>

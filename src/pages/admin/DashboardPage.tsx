@@ -48,16 +48,16 @@ function KpiCard({
       onClick={onClick}
       className={cn(
         "transition-all duration-200 border-slate-200",
-        onClick && "hover:shadow-md hover:border-blue-400 hover:-translate-y-0.5 cursor-pointer group"
+        onClick && "hover:shadow-md hover:border-emerald-300 hover:-translate-y-0.5 cursor-pointer group"
       )}
     >
       <CardContent className="pt-6">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
-            <p className="text-sm font-medium text-muted-foreground group-hover:text-blue-700 transition-colors flex items-center gap-1">
+            <p className="text-sm font-medium text-muted-foreground group-hover:text-emerald-800 transition-colors flex items-center gap-1">
               {title}
               {onClick && (
-                <ArrowRight className="h-3.5 w-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-blue-600" />
+                <ArrowRight className="h-3.5 w-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-emerald-700" />
               )}
             </p>
             <p className="text-2xl font-bold tracking-tight text-slate-900">{value}</p>
@@ -71,14 +71,14 @@ function KpiCard({
               </div>
             )}
             {actionText && (
-              <p className="text-[11px] font-medium text-blue-600 pt-1 group-hover:underline">
+              <p className="text-[11px] font-medium text-emerald-800 pt-1 group-hover:underline">
                 {actionText} →
               </p>
             )}
           </div>
           <div
             className={cn(
-              "h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center transition-colors group-hover:bg-blue-50",
+              "h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center transition-colors group-hover:bg-emerald-50",
               color
             )}
           >
@@ -160,7 +160,7 @@ export default function AdminDashboardPage() {
           value={isLoading ? "—" : stats?.totalOrgs ?? 0}
           description="Liên đội đang hoạt động"
           icon={<Building2 className="h-5 w-5" />}
-          color="text-blue-600"
+          color="text-emerald-700"
           onClick={() => navigate("/admin/organizations")}
           actionText="Quản lý đơn vị"
         />
@@ -200,7 +200,7 @@ export default function AdminDashboardPage() {
           value={isLoading ? "—" : stats?.submitted ?? 0}
           description="Tiêu chí các đơn vị đã nộp"
           icon={<FileCheck className="h-5 w-5" />}
-          color="text-blue-600"
+          color="text-emerald-700"
           onClick={() => navigate(reviewUrl)}
           actionText="Xem thẩm định"
         />
@@ -237,13 +237,13 @@ export default function AdminDashboardPage() {
       <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
         <Card
           onClick={() => navigate("/admin/reports")}
-          className="cursor-pointer hover:border-blue-400 hover:shadow-md transition-all group"
+          className="cursor-pointer hover:border-emerald-300 hover:shadow-md transition-all group"
         >
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
-            <CardTitle className="text-base font-semibold group-hover:text-blue-700 transition-colors">
+            <CardTitle className="text-base font-semibold group-hover:text-emerald-800 transition-colors">
               Tiến độ nộp bài toàn hệ thống
             </CardTitle>
-            <ArrowRight className="h-4 w-4 text-slate-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
+            <ArrowRight className="h-4 w-4 text-slate-400 group-hover:text-emerald-700 group-hover:translate-x-1 transition-all" />
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center justify-between text-sm">
@@ -252,8 +252,8 @@ export default function AdminDashboardPage() {
               </span>
               <span className="font-semibold text-slate-900">{submissionProgress}%</span>
             </div>
-            <Progress value={submissionProgress} className="h-2" />
-            <p className="text-[11px] text-blue-600 font-medium pt-1 text-right group-hover:underline">
+            <Progress value={submissionProgress} className="h-2 bg-emerald-100" />
+            <p className="text-[11px] text-emerald-800 font-medium pt-1 text-right group-hover:underline">
               Xem chi tiết báo cáo & xuất Excel →
             </p>
           </CardContent>
@@ -261,13 +261,13 @@ export default function AdminDashboardPage() {
 
         <Card
           onClick={() => navigate(reviewUrl)}
-          className="cursor-pointer hover:border-blue-400 hover:shadow-md transition-all group"
+          className="cursor-pointer hover:border-emerald-300 hover:shadow-md transition-all group"
         >
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
-            <CardTitle className="text-base font-semibold group-hover:text-blue-700 transition-colors">
+            <CardTitle className="text-base font-semibold group-hover:text-emerald-800 transition-colors">
               Tiến độ thẩm định của Hội đồng
             </CardTitle>
-            <ArrowRight className="h-4 w-4 text-slate-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
+            <ArrowRight className="h-4 w-4 text-slate-400 group-hover:text-emerald-700 group-hover:translate-x-1 transition-all" />
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center justify-between text-sm">
@@ -276,8 +276,8 @@ export default function AdminDashboardPage() {
               </span>
               <span className="font-semibold text-slate-900">{verificationProgress}%</span>
             </div>
-            <Progress value={verificationProgress} className="h-2" />
-            <p className="text-[11px] text-blue-600 font-medium pt-1 text-right group-hover:underline">
+            <Progress value={verificationProgress} className="h-2 bg-emerald-100" />
+            <p className="text-[11px] text-emerald-800 font-medium pt-1 text-right group-hover:underline">
               Vào trang Thẩm định & xác thực →
             </p>
           </CardContent>
@@ -289,7 +289,7 @@ export default function AdminDashboardPage() {
         <CardHeader className="pb-3 flex flex-row items-center justify-between gap-4 flex-wrap">
           <div>
             <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <History className="h-4 w-4 text-blue-600" />
+              <History className="h-4 w-4 text-emerald-700" />
               Nhật ký hoạt động gần đây
             </CardTitle>
             <CardDescription className="mt-1">
@@ -300,7 +300,7 @@ export default function AdminDashboardPage() {
             variant="outline"
             size="sm"
             onClick={() => navigate("/admin/audit-logs")}
-            className="text-xs gap-1.5 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300"
+            className="text-xs gap-1.5 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300"
           >
             Xem tất cả nhật ký
             <ArrowRight className="h-3.5 w-3.5" />
@@ -309,7 +309,7 @@ export default function AdminDashboardPage() {
         <CardContent>
           {isLoading ? (
             <div className="p-8 text-center text-sm text-muted-foreground space-y-2">
-              <Loader2 className="h-5 w-5 animate-spin mx-auto text-blue-600" />
+              <Loader2 className="h-5 w-5 animate-spin mx-auto text-emerald-700" />
               <p>Đang tải nhật ký...</p>
             </div>
           ) : !stats?.recentLogs || stats.recentLogs.length === 0 ? (

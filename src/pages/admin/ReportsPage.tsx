@@ -285,7 +285,7 @@ export default function ReportsPage() {
 
           <Button
             variant="default"
-            className="gap-2 shrink-0 bg-blue-700 hover:bg-blue-800 text-white"
+            className="gap-2 shrink-0 bg-emerald-700 hover:bg-emerald-800 text-white font-bold"
             onClick={handleExportExcel}
             disabled={exportingExcel}
           >
@@ -338,7 +338,7 @@ export default function ReportsPage() {
       <Card className="print:shadow-none print:border-none">
         <CardHeader className="pb-3 print:hidden">
           <CardTitle className="text-base flex items-center gap-2">
-            <BarChart3 className="h-4 w-4 text-blue-600" />
+            <BarChart3 className="h-4 w-4 text-emerald-700" />
             Bảng tổng hợp xếp hạng kết quả đánh giá ({rankings?.length || 0} đơn vị)
           </CardTitle>
           <CardDescription>
@@ -348,7 +348,7 @@ export default function ReportsPage() {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-12 text-center text-sm text-muted-foreground space-y-2">
-              <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-600" />
+              <Loader2 className="h-6 w-6 animate-spin mx-auto text-emerald-700" />
               <p>Đang tổng hợp báo cáo...</p>
             </div>
           ) : (rankings ?? []).length === 0 ? (
@@ -378,13 +378,13 @@ export default function ReportsPage() {
                     let classificationColor = "text-slate-600";
                     if (r.finalScore >= 90) {
                       classification = "Hoàn thành xuất sắc";
-                      classificationColor = "text-emerald-700 font-semibold";
+                      classificationColor = "text-emerald-800 font-bold";
                     } else if (r.finalScore >= 70) {
                       classification = "Hoàn thành tốt";
-                      classificationColor = "text-blue-700 font-medium";
+                      classificationColor = "text-emerald-700 font-semibold";
                     } else if (r.finalScore >= 50) {
                       classification = "Hoàn thành";
-                      classificationColor = "text-slate-700";
+                      classificationColor = "text-slate-800 font-medium";
                     }
 
                     return (
@@ -399,11 +399,11 @@ export default function ReportsPage() {
                         )}
                         <TableCell className="font-mono text-xs font-semibold">{r.code}</TableCell>
                         <TableCell className="font-medium text-slate-900">{r.name}</TableCell>
-                        <TableCell className="text-center text-xs text-blue-700 font-medium">{r.submittedCriteria} TC</TableCell>
-                        <TableCell className="text-center text-xs text-emerald-700 font-medium">{r.verifiedCriteria} TC</TableCell>
+                        <TableCell className="text-center text-xs text-slate-900 font-semibold">{r.submittedCriteria} TC</TableCell>
+                        <TableCell className="text-center text-xs text-emerald-700 font-bold">{r.verifiedCriteria} TC</TableCell>
                         <TableCell className="text-center text-xs font-semibold">{r.criteriaScore.toFixed(2)}đ</TableCell>
-                        <TableCell className="text-center text-xs text-emerald-600 font-semibold">+{r.bonusScore.toFixed(2)}đ</TableCell>
-                        <TableCell className="text-center text-sm font-extrabold text-blue-800">
+                        <TableCell className="text-center text-xs text-emerald-700 font-bold">+{r.bonusScore.toFixed(2)}đ</TableCell>
+                        <TableCell className="text-center text-sm font-black text-slate-950">
                           {r.finalScore.toFixed(2)}đ
                         </TableCell>
                         <TableCell className={`text-center text-xs ${classificationColor}`}>

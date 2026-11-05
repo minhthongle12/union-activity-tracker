@@ -123,7 +123,7 @@ export default function UserAccountPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
-              <User className="h-4 w-4 text-blue-600" />
+              <User className="h-4 w-4 text-emerald-700" />
               <CardTitle className="text-base">Thông tin chung</CardTitle>
             </div>
             <CardDescription>Cập nhật tên hiển thị của tài khoản</CardDescription>

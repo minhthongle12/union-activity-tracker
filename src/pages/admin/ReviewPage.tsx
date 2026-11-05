@@ -1603,7 +1603,7 @@ function EvidenceReviewSubCard({
                 <button
                   type="button"
                   onClick={() => onViewFile(ev)}
-                  className="font-medium text-slate-800 hover:text-blue-700 hover:underline px-2.5 py-1 text-xs rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors shrink-0"
+                  className="font-medium text-slate-800 hover:text-emerald-800 hover:underline px-2.5 py-1 text-xs rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors shrink-0"
                 >
                   Mở
                 </button>

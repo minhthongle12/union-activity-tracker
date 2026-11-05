@@ -213,7 +213,7 @@ export default function NotificationsPage() {
           </div>
 
           {/* Diagnostic Info Pills */}
-          <div className="flex items-center gap-2 pt-2 border-t border-blue-100 flex-wrap text-[11px] text-slate-600">
+          <div className="flex items-center gap-2 pt-2 border-t border-emerald-100 flex-wrap text-[11px] text-slate-600">
             <span className="flex items-center gap-1">
               Hỗ trợ:
               {pushStatus.supported ? (
@@ -253,7 +253,7 @@ export default function NotificationsPage() {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-12 text-center text-sm text-muted-foreground space-y-2">
-              <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-600" />
+              <Loader2 className="h-6 w-6 animate-spin mx-auto text-emerald-700" />
               <p>Đang tải thông báo...</p>
             </div>
           ) : (notifications ?? []).length === 0 ? (

@@ -22,14 +22,14 @@ function GlobalLoadingOverlay({ show, message }: { show: boolean; message: strin
       aria-live="polite"
     >
       {/* Top progress line running smoothly across the top */}
-      <div className="fixed top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-500 animate-pulse z-[100000]" />
+      <div className="fixed top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-teal-500 to-lime-500 animate-pulse z-[100000]" />
 
       {/* Light subtle backdrop overlay */}
       <div className="absolute inset-0 bg-white/50 dark:bg-slate-950/50 backdrop-blur-[1.5px] transition-all" />
 
       {/* Center status pill */}
-      <div className="relative z-10 flex items-center gap-3 px-5 py-3 rounded-full bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xl shadow-slate-900/10 animate-in zoom-in-95 duration-150">
-        <Loader2 className="h-5 w-5 text-blue-600 animate-spin shrink-0" />
+      <div className="relative z-10 flex items-center gap-3 px-5 py-3 rounded-full bg-white dark:bg-slate-900 border border-emerald-200/90 dark:border-slate-800 shadow-xl shadow-slate-900/10 animate-in zoom-in-95 duration-150">
+        <Loader2 className="h-5 w-5 text-emerald-700 animate-spin shrink-0" />
         <span className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 tracking-wide select-none">
           {message}
         </span>

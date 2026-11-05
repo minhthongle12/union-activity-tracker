@@ -121,7 +121,7 @@ export default function EvidencePage() {
       case "doc1":
         return <Badge variant="secondary" className="bg-amber-50 text-amber-800 border-amber-200 text-[10px]">1. Văn bản triển khai</Badge>;
       case "doc2":
-        return <Badge variant="secondary" className="bg-blue-50 text-blue-800 border-blue-200 text-[10px]">2. Báo cáo kết quả</Badge>;
+        return <Badge variant="secondary" className="bg-teal-50 text-teal-800 border-teal-200 text-[10px]">2. Báo cáo kết quả</Badge>;
       case "link3":
         return <Badge variant="secondary" className="bg-emerald-50 text-emerald-800 border-emerald-200 text-[10px]">3. Tin bài hoạt động</Badge>;
     }
@@ -164,60 +164,60 @@ export default function EvidencePage() {
       </div>
 
       {/* Table */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <FolderOpen className="h-4 w-4 text-blue-600" />
+      <Card className="border-emerald-200 shadow-2xs rounded-2xl overflow-hidden">
+        <CardHeader className="pb-3 border-b border-emerald-50 bg-white">
+          <CardTitle className="text-base font-bold text-slate-950 flex items-center gap-2">
+            <FolderOpen className="h-4 w-4 text-emerald-700" />
             Tất cả minh chứng ({filtered.length})
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="p-12 text-center text-sm text-muted-foreground space-y-2">
-              <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-600" />
+            <div className="p-12 text-center text-sm text-slate-600 space-y-2">
+              <Loader2 className="h-6 w-6 animate-spin mx-auto text-emerald-700" />
               <p>Đang tải kho minh chứng...</p>
             </div>
           ) : filtered.length === 0 ? (
-            <div className="p-16 text-center text-sm text-muted-foreground">
+            <div className="p-16 text-center text-sm text-slate-600">
               <FolderOpen className="h-10 w-10 text-slate-200 mx-auto mb-3" />
               Chưa có minh chứng nào trong kho.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
-                <TableHeader>
+                <TableHeader className="bg-emerald-50/70 border-b border-emerald-200">
                   <TableRow>
-                    <TableHead className="w-[100px]">Tiêu chí</TableHead>
-                    <TableHead>Tên tệp / Tiêu đề liên kết</TableHead>
-                    <TableHead className="w-[180px]">Loại minh chứng</TableHead>
-                    <TableHead className="w-[120px]">Dung lượng</TableHead>
-                    <TableHead className="w-[140px]">Ngày nộp</TableHead>
-                    <TableHead className="w-[90px] text-right">Xem</TableHead>
+                    <TableHead className="w-[100px] font-bold text-slate-950">Tiêu chí</TableHead>
+                    <TableHead className="font-bold text-slate-950">Tên tệp / Tiêu đề liên kết</TableHead>
+                    <TableHead className="w-[180px] font-bold text-slate-950">Loại minh chứng</TableHead>
+                    <TableHead className="w-[120px] font-bold text-slate-950">Dung lượng</TableHead>
+                    <TableHead className="w-[140px] font-bold text-slate-950">Ngày nộp</TableHead>
+                    <TableHead className="w-[90px] text-right font-bold text-slate-950">Xem</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.map((item: any) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-mono text-xs font-semibold text-blue-700">
+                    <TableRow key={item.id} className="hover:bg-emerald-50/30">
+                      <TableCell className="font-mono text-xs font-black text-slate-950">
                         {item.criterionCode}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           {item.external_url ? (
-                            <Globe className="h-4 w-4 text-emerald-600 shrink-0" />
+                            <Globe className="h-4 w-4 text-emerald-700 shrink-0" />
                           ) : (
-                            <FileText className="h-4 w-4 text-blue-600 shrink-0" />
+                            <FileText className="h-4 w-4 text-emerald-700 shrink-0" />
                           )}
-                          <span className="font-medium text-xs text-slate-800 line-clamp-1">
+                          <span className="font-bold text-xs text-slate-950 line-clamp-1">
                             {item.file_name}
                           </span>
                         </div>
                       </TableCell>
                       <TableCell>{getTypeBadge(item.evidence_type)}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
+                      <TableCell className="text-xs text-slate-600 font-medium">
                         {item.file_size ? `${Math.round(item.file_size / 1024)} KB` : "URL Link"}
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground font-mono">
+                      <TableCell className="text-xs text-slate-600 font-mono">
                         {new Date(item.created_at).toLocaleDateString("vi-VN")}
                       </TableCell>
                       <TableCell className="text-right">
@@ -226,7 +226,7 @@ export default function EvidencePage() {
                             href={item.external_url}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex p-1.5 text-slate-600 hover:text-blue-600 rounded-md hover:bg-slate-100"
+                            className="inline-flex p-1.5 text-slate-700 hover:text-emerald-800 rounded-md hover:bg-emerald-50"
                             title="Mở liên kết"
                           >
                             <ExternalLink className="h-4 w-4" />
@@ -235,13 +235,13 @@ export default function EvidencePage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-slate-600 hover:text-blue-600"
+                            className="h-8 w-8 text-slate-700 hover:text-emerald-800 hover:bg-emerald-50"
                             onClick={() => handleDownloadFile(item)}
                             disabled={downloadingId === item.id}
                             title="Tải tệp"
                           >
                             {downloadingId === item.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                              <Loader2 className="h-4 w-4 animate-spin text-emerald-700" />
                             ) : (
                               <Download className="h-4 w-4" />
                             )}

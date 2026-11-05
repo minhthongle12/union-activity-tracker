@@ -93,7 +93,7 @@ export default function AuditLogsPage() {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-12 text-center text-sm text-muted-foreground space-y-2">
-              <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-600" />
+              <Loader2 className="h-6 w-6 animate-spin mx-auto text-emerald-700" />
               <p>Đang tải nhật ký hoạt động...</p>
             </div>
           ) : filtered.length === 0 ? (
@@ -144,7 +144,7 @@ export default function AuditLogsPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 text-slate-500 hover:text-blue-600"
+                          className="h-7 w-7 text-slate-500 hover:text-emerald-800 hover:bg-emerald-50"
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedLog(log);
@@ -167,7 +167,7 @@ export default function AuditLogsPage() {
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
-              <History className="h-4 w-4 text-blue-600" />
+              <History className="h-4 w-4 text-emerald-700" />
               Chi tiết nhật ký hoạt động
             </DialogTitle>
             <DialogDescription>
@@ -197,7 +197,7 @@ export default function AuditLogsPage() {
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-[11px]">Hành động</span>
-                  <span className="font-mono font-bold text-blue-700">{selectedLog.action}</span>
+                  <span className="font-mono font-bold text-emerald-800">{selectedLog.action}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-[11px]">Thực thể (Entity)</span>

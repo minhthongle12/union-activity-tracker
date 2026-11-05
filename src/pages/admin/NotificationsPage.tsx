@@ -182,7 +182,7 @@ export default function AdminNotificationsPage() {
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Đang có <strong className="text-blue-700 font-semibold">{pushStats?.activeSubscriptions || 0} thiết bị</strong> của đoàn viên / cơ sở đăng ký nhận thông báo đẩy.
+                Đang có <strong className="text-emerald-800 font-semibold">{pushStats?.activeSubscriptions || 0} thiết bị</strong> của liên đội / cơ sở đăng ký nhận thông báo đẩy.
               </p>
             </div>
           </div>
@@ -193,7 +193,7 @@ export default function AdminNotificationsPage() {
               variant="outline"
               onClick={handleTestBroadcastPush}
               disabled={isTestingPush}
-              className="text-xs h-8 gap-1.5 bg-white border-blue-300 text-blue-700 hover:bg-blue-50"
+              className="text-xs h-8 gap-1.5 bg-white border-emerald-300 text-emerald-800 hover:bg-emerald-50 font-bold"
             >
               {isTestingPush ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -210,14 +210,14 @@ export default function AdminNotificationsPage() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <Bell className="h-4 w-4 text-blue-600" />
+            <Bell className="h-4 w-4 text-emerald-700" />
             Lịch sử gửi thông báo gần đây ({notifications?.length || 0})
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-12 text-center text-sm text-muted-foreground space-y-2">
-              <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-600" />
+              <Loader2 className="h-6 w-6 animate-spin mx-auto text-emerald-700" />
               <p>Đang tải thông báo...</p>
             </div>
           ) : (notifications ?? []).length === 0 ? (
@@ -229,7 +229,7 @@ export default function AdminNotificationsPage() {
             <div className="divide-y divide-slate-100">
               {notifications?.map((item) => (
                 <div key={item.id} className="p-4 flex items-start gap-3 hover:bg-slate-50">
-                  <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 shrink-0 mt-0.5">
+                  <div className="h-8 w-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-800 shrink-0 mt-0.5">
                     <Bell className="h-4 w-4" />
                   </div>
                   <div className="flex-1 min-w-0">

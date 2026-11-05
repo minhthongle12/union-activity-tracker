@@ -695,7 +695,7 @@ export default function PeriodsPage() {
                     onClick={() => openConfig(period)}
                   >
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-slate-900 text-base group-hover:text-blue-700 transition-colors">
+                      <h3 className="font-semibold text-slate-900 text-base group-hover:text-emerald-800 transition-colors">
                         {period.name}
                       </h3>
                       {statusBadge(period.status)}
@@ -713,7 +713,7 @@ export default function PeriodsPage() {
                         Hạn nộp: {period.submission_deadline ? new Date(period.submission_deadline).toLocaleDateString("vi-VN") : "Chưa đặt"}
                       </span>
                       <span className="flex items-center gap-1">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700 shrink-0" />
                         Hạn thẩm định: {period.review_deadline ? new Date(period.review_deadline).toLocaleDateString("vi-VN") : "Chưa đặt"}
                       </span>
                       <span className="text-slate-300 hidden sm:inline">|</span>
@@ -888,14 +888,14 @@ export default function PeriodsPage() {
                     <TabsList className="grid grid-cols-2 w-full sm:w-[380px] bg-slate-200/80 p-0.5">
                       <TabsTrigger
                         value="orgs"
-                        className="text-xs gap-1.5 data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-xs"
+                        className="text-xs gap-1.5 data-[state=active]:bg-white data-[state=active]:text-emerald-800 data-[state=active]:shadow-xs"
                       >
                         <Building2 className="h-3.5 w-3.5" />
                         Liên đội ({createSelectedOrgIds.length}/{allOrgs?.length || 0})
                       </TabsTrigger>
                       <TabsTrigger
                         value="criteria"
-                        className="text-xs gap-1.5 data-[state=active]:bg-white data-[state=active]:text-emerald-700 data-[state=active]:shadow-xs"
+                        className="text-xs gap-1.5 data-[state=active]:bg-white data-[state=active]:text-emerald-800 data-[state=active]:shadow-xs"
                       >
                         <ClipboardList className="h-3.5 w-3.5" />
                         Tiêu chí theo nhóm ({createSelectedCriteriaIds.length}/{libraryCriteria?.length || 0})
@@ -904,11 +904,11 @@ export default function PeriodsPage() {
 
                     <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 self-end sm:self-auto">
                       <span>Đã chọn:</span>
-                      <Badge variant="outline" className="text-[11px] font-semibold bg-blue-50 text-blue-700 border-blue-200">
+                      <Badge variant="outline" className="text-[11px] font-semibold bg-emerald-50 text-emerald-800 border-emerald-200">
                         {createSelectedOrgIds.length} cơ sở
                       </Badge>
                       <span>•</span>
-                      <Badge variant="outline" className="text-[11px] font-semibold bg-emerald-50 text-emerald-700 border-emerald-200">
+                      <Badge variant="outline" className="text-[11px] font-semibold bg-emerald-50 text-emerald-800 border-emerald-200">
                         {createSelectedCriteriaIds.length} tiêu chí
                       </Badge>
                     </div>
@@ -931,7 +931,7 @@ export default function PeriodsPage() {
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="text-xs h-7 px-2.5 text-blue-700 hover:text-blue-800 bg-white"
+                          className="text-xs h-7 px-2.5 text-emerald-800 hover:text-emerald-900 hover:bg-emerald-50 bg-white"
                           onClick={() => setCreateSelectedOrgIds((allOrgs ?? []).map((o) => o.id))}
                         >
                           Chọn tất cả ({allOrgs?.length || 0})
@@ -963,7 +963,7 @@ export default function PeriodsPage() {
                                 className={cn(
                                   "flex items-start gap-2.5 p-2 rounded-md border cursor-pointer transition-colors text-xs",
                                   checked
-                                    ? "bg-blue-50/60 border-blue-200 text-blue-950 font-medium"
+                                    ? "bg-emerald-50/70 border-emerald-300 text-emerald-950 font-medium"
                                     : "bg-white border-slate-100 hover:bg-slate-50 text-slate-700"
                                 )}
                               >
@@ -974,7 +974,7 @@ export default function PeriodsPage() {
                                 />
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-1.5">
-                                    <span className="font-mono text-[11px] font-semibold text-blue-700 shrink-0">
+                                    <span className="font-mono text-[11px] font-semibold text-emerald-700 shrink-0">
                                       [{o.code}]
                                     </span>
                                     <span className="line-clamp-1">{o.name}</span>
@@ -1220,21 +1220,21 @@ export default function PeriodsPage() {
           <DialogHeader>
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <DialogTitle className="flex items-center gap-2">
-                <Settings2 className="h-5 w-5 text-blue-600" />
+                <Settings2 className="h-5 w-5 text-emerald-700" />
                 Cấu hình đợt: {configPeriod?.name}
               </DialogTitle>
               {configPeriod && (
                 <Button
                   variant="outline"
                   size="sm"
-                  className="gap-1.5 text-blue-700 border-blue-200 hover:bg-blue-50 font-medium"
+                  className="gap-1.5 text-emerald-800 border-emerald-300 hover:bg-emerald-50 font-bold"
                   onClick={() => {
                     const pid = configPeriod.id;
                     setConfigPeriod(null);
                     navigate(`/admin/review?period=${pid}`);
                   }}
                 >
-                  <CheckSquare className="h-3.5 w-3.5 text-blue-600" />
+                  <CheckSquare className="h-3.5 w-3.5 text-emerald-700" />
                   Vào thẩm định đợt này
                 </Button>
               )}
@@ -1347,7 +1347,7 @@ export default function PeriodsPage() {
                       />
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="font-mono font-semibold text-xs text-blue-700">{c.code}</span>
+                          <span className="font-mono font-bold text-xs text-slate-950">[{c.code}]</span>
                           <span className="text-xs text-muted-foreground">({c.max_score} điểm)</span>
                         </div>
                         <p className="font-medium text-slate-800 text-xs mt-0.5">{c.title}</p>

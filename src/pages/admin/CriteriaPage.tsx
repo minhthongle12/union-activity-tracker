@@ -475,7 +475,7 @@ export default function CriteriaPage() {
                           <TableCell className="text-xs text-muted-foreground">
                             {item.category?.name || "—"}
                           </TableCell>
-                          <TableCell className="text-center font-semibold text-blue-700">
+                          <TableCell className="text-center font-bold text-slate-950">
                             {item.max_score}đ
                           </TableCell>
                           <TableCell>
@@ -486,7 +486,7 @@ export default function CriteriaPage() {
                                 </Badge>
                               )}
                               {item.req_doc2 && (
-                                <Badge variant="secondary" className="text-[10px] py-0 px-1.5 gap-1 bg-blue-50 text-blue-700 border-blue-200">
+                                <Badge variant="secondary" className="text-[10px] py-0 px-1.5 gap-1 bg-teal-50 text-teal-800 border-teal-200">
                                   <FileCheck2 className="h-3 w-3" /> BC
                                 </Badge>
                               )}
