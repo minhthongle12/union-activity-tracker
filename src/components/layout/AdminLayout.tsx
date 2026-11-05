@@ -39,16 +39,16 @@ import { PWAInstallPrompt } from "@/components/pwa/PWAInstallPrompt";
 
 const navItems = [
   { to: "/admin", icon: LayoutDashboard, label: "Tổng quan", end: true },
-  { to: "/admin/organizations", icon: Building2, label: "Quản lý đơn vị" },
-  { to: "/admin/users", icon: Users, label: "Quản lý tài khoản" },
   { to: "/admin/periods", icon: Calendar, label: "Đợt đánh giá" },
-  { to: "/admin/criteria", icon: ClipboardList, label: "Bộ tiêu chí" },
-  { to: "/admin/import-export", icon: FileSpreadsheet, label: "Import / Export Excel" },
   { to: "/admin/review", icon: CheckSquare, label: "Thẩm định & xác thực" },
   { to: "/admin/bonus", icon: Award, label: "Điểm cộng" },
+  { to: "/admin/criteria", icon: ClipboardList, label: "Bộ tiêu chí" },
+  { to: "/admin/import-export", icon: FileSpreadsheet, label: "Import / Export Excel" },
   { to: "/admin/reports", icon: BarChart3, label: "Báo cáo & thống kê" },
   { to: "/admin/notifications", icon: Bell, label: "Thông báo" },
   { to: "/admin/audit-logs", icon: History, label: "Nhật ký hoạt động" },
+  { to: "/admin/organizations", icon: Building2, label: "Quản lý đơn vị" },
+  { to: "/admin/users", icon: Users, label: "Quản lý tài khoản" },
   { to: "/admin/settings", icon: Settings, label: "Cài đặt hệ thống" },
 ];
 
@@ -130,24 +130,34 @@ export function AdminLayout() {
           </div>
           {navItems.map((item) => {
             const Icon = item.icon;
+            const isInfrequentSection = item.to === "/admin/organizations";
             return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                onClick={() => setSidebarOpen(false)}
-                className={({ isActive }) =>
-                  cn(
-                    "flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-xl transition-all duration-150",
-                    isActive
-                      ? "bg-emerald-600 text-white shadow-md shadow-emerald-950/20 font-semibold ring-1 ring-emerald-400/30"
-                      : "text-emerald-100/80 hover:bg-emerald-900/40 hover:text-white"
-                  )
-                }
-              >
-                <Icon className="h-4 w-4 shrink-0 text-emerald-300" />
-                <span className="truncate">{item.label}</span>
-              </NavLink>
+              <div key={item.to}>
+                {isInfrequentSection && (
+                  <div className="pt-3 pb-1 px-3">
+                    <div className="border-t border-emerald-900/60 mb-2" />
+                    <span className="text-[10px] font-semibold text-emerald-400/70 uppercase tracking-wider">
+                      Cấu hình & Tổ chức
+                    </span>
+                  </div>
+                )}
+                <NavLink
+                  to={item.to}
+                  end={item.end}
+                  onClick={() => setSidebarOpen(false)}
+                  className={({ isActive }) =>
+                    cn(
+                      "flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-xl transition-all duration-150",
+                      isActive
+                        ? "bg-emerald-600 text-white shadow-md shadow-emerald-950/20 font-semibold ring-1 ring-emerald-400/30"
+                        : "text-emerald-100/80 hover:bg-emerald-900/40 hover:text-white"
+                    )
+                  }
+                >
+                  <Icon className="h-4 w-4 shrink-0 text-emerald-300" />
+                  <span className="truncate">{item.label}</span>
+                </NavLink>
+              </div>
             );
           })}
         </div>
