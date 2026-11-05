@@ -202,8 +202,7 @@ export default function UserBonusPage() {
     requested_score: 1.0,
     unit: "học sinh / giải thưởng",
     description: "",
-    evidenceName: "",
-    evidenceUrl: "",
+    evidenceLinks: [{ id: "1", name: "", url: "" }],
   });
 
   const { data: assignedPeriods } = useQuery({
@@ -285,8 +284,7 @@ export default function UserBonusPage() {
       requested_score: defaultCrit.base_points,
       unit: defaultCrit.unit,
       description: "",
-      evidenceName: "",
-      evidenceUrl: "",
+      evidenceLinks: [{ id: "1", name: "", url: "" }],
     });
     setDialogOpen(true);
   }
@@ -358,14 +356,16 @@ export default function UserBonusPage() {
 
       if (bonusError) throw bonusError;
 
-      // 2. Insert evidence if provided
-      if (form.evidenceUrl.trim() && bonusData) {
-        const { error: evError } = await supabase.from("bonus_evidence_items").insert({
+      // 2. Insert all provided evidence links
+      const validLinks = (form.evidenceLinks || []).filter((l) => l.url.trim());
+      if (validLinks.length > 0 && bonusData) {
+        const evPayload = validLinks.map((l) => ({
           bonus_request_id: bonusData.id,
-          file_name: form.evidenceName.trim() || form.title.trim() || "Minh chứng đính kèm",
-          external_url: form.evidenceUrl.trim(),
+          file_name: l.name.trim() || form.title.trim() || "Minh chứng đính kèm",
+          external_url: l.url.trim(),
           uploaded_by: profile?.id || null,
-        });
+        }));
+        const { error: evError } = await supabase.from("bonus_evidence_items").insert(evPayload);
         if (evError) console.error("Error inserting bonus evidence:", evError);
       }
 
@@ -373,7 +373,7 @@ export default function UserBonusPage() {
       if (status === "submitted") {
         await notifyAdmins({
           title: "Đề xuất điểm thưởng mới",
-          message: `Liên đội ${profile?.display_name || "đơn vị"} vừa gửi đề xuất điểm thưởng: "${form.title}" (+${form.requested_score} điểm).`,
+          message: `Liên đội ${profile?.display_name || "đơn vị"} vừa gửi đề xuất điểm thưởng: "${form.title}" (+${form.requested_score} điểm) kèm ${validLinks.length} minh chứng.`,
           type: "bonus_submitted",
           relatedId: bonusData?.id,
           url: "/admin/bonus",
@@ -391,7 +391,7 @@ export default function UserBonusPage() {
             bonus_code: form.bonus_code,
             quantity: form.quantity,
             unit: form.unit,
-            evidenceUrl: form.evidenceUrl,
+            evidenceLinks: validLinks.map((l) => l.url),
           },
         });
       } else {
@@ -806,23 +806,88 @@ export default function UserBonusPage() {
               />
             </div>
 
-            {/* 6. Minh chứng bài viết / link */}
-            <div className="border border-emerald-200 rounded-xl p-3 bg-emerald-50/50 space-y-2">
-              <Label className="text-xs font-bold text-slate-950 block">
-                Liên kết bài viết minh chứng (Facebook, Drive, Báo chí...)
-              </Label>
-              <Input
-                placeholder="Tiêu đề bài viết minh chứng (ví dụ: Tin bài trao giải trên Fanpage)"
-                value={form.evidenceName}
-                onChange={(e) => setForm({ ...form, evidenceName: e.target.value })}
-                className="text-xs bg-white h-9 border-slate-300"
-              />
-              <Input
-                placeholder="https://www.facebook.com/share/p/..."
-                value={form.evidenceUrl}
-                onChange={(e) => setForm({ ...form, evidenceUrl: e.target.value })}
-                className="text-xs bg-white h-9 font-mono border-slate-300"
-              />
+            {/* 6. Minh chứng bài viết / link (hỗ trợ nhiều link) */}
+            <div className="border border-emerald-200 rounded-xl p-3 bg-emerald-50/50 space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-950 block">
+                  Liên kết bài viết minh chứng (Facebook, Drive, Báo chí...)
+                </Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setForm((prev) => ({
+                      ...prev,
+                      evidenceLinks: [
+                        ...prev.evidenceLinks,
+                        { id: Date.now().toString(), name: "", url: "" },
+                      ],
+                    }))
+                  }
+                  className="h-7 text-[11px] px-2 gap-1 border-emerald-300 text-emerald-800 bg-white hover:bg-emerald-50"
+                >
+                  <Plus className="h-3 w-3" />
+                  Thêm link khác
+                </Button>
+              </div>
+
+              <div className="space-y-2.5">
+                {form.evidenceLinks.map((link, idx) => (
+                  <div
+                    key={link.id}
+                    className="p-2.5 rounded-lg border border-slate-200 bg-white space-y-1.5 relative shadow-2xs"
+                  >
+                    <div className="flex items-center justify-between text-slate-600 text-[11px] font-semibold">
+                      <span>Liên kết minh chứng #{idx + 1}</span>
+                      {form.evidenceLinks.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setForm((prev) => ({
+                              ...prev,
+                              evidenceLinks: prev.evidenceLinks.filter((l) => l.id !== link.id),
+                            }))
+                          }
+                          className="text-slate-400 hover:text-red-600 p-0.5 cursor-pointer"
+                          title="Xóa link này"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <Input
+                      placeholder="Tiêu đề bài viết minh chứng (ví dụ: Tin bài trao giải trên Fanpage)"
+                      value={link.name}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setForm((prev) => ({
+                          ...prev,
+                          evidenceLinks: prev.evidenceLinks.map((l) =>
+                            l.id === link.id ? { ...l, name: val } : l
+                          ),
+                        }));
+                      }}
+                      className="text-xs bg-white h-8 border-slate-300"
+                    />
+                    <Input
+                      placeholder="https://www.facebook.com/share/p/... hoặc https://drive.google.com/..."
+                      value={link.url}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setForm((prev) => ({
+                          ...prev,
+                          evidenceLinks: prev.evidenceLinks.map((l) =>
+                            l.id === link.id ? { ...l, url: val } : l
+                          ),
+                        }));
+                      }}
+                      className="text-xs bg-white h-8 font-mono border-slate-300"
+                    />
+                  </div>
+                ))}
+              </div>
+
               <p className="text-[10px] text-slate-600 font-medium">
                 * Lưu ý: Hình ảnh bài viết minh chứng phải có Logo Hội đồng Đội theo đúng quy định.
               </p>

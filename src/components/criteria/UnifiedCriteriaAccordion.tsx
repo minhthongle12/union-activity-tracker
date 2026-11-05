@@ -34,6 +34,7 @@ import {
   Send,
   Save,
   Clock,
+  Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -83,11 +84,14 @@ export function UnifiedCriteriaAccordion({
   // Local evidence list
   const [localEvidence, setLocalEvidence] = useState<EvidenceItem[]>(evidenceItems);
 
-  // Add Link dialog
+  // Add Link dialog state (supports multiple links & bulk paste)
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkType, setLinkType] = useState<EvidenceType>("link3");
-  const [linkUrl, setLinkUrl] = useState("");
-  const [linkTitle, setLinkTitle] = useState("");
+  const [linkRows, setLinkRows] = useState<{ id: string; title: string; url: string }[]>([
+    { id: "1", title: "", url: "" },
+  ]);
+  const [bulkText, setBulkText] = useState("");
+  const [inputTab, setInputTab] = useState<"rows" | "bulk">("rows");
 
   // Admin evaluation state
   const [adminScore, setAdminScore] = useState<number>(
@@ -217,37 +221,73 @@ export function UnifiedCriteriaAccordion({
     }
   };
 
-  // Add Link
-  const handleAddLink = () => {
-    if (!linkUrl.trim()) {
-      toast.error("Vui lòng nhập đường dẫn URL.");
-      return;
+  // Add Multiple Links (Rows or Bulk paste)
+  const handleAddMultipleLinks = () => {
+    const toAdd: { title: string; url: string }[] = [];
+
+    if (inputTab === "rows") {
+      for (const row of linkRows) {
+        const trimmedUrl = row.url.trim();
+        if (!trimmedUrl) continue;
+        try {
+          new URL(trimmedUrl);
+          toAdd.push({
+            title: row.title.trim() || trimmedUrl,
+            url: trimmedUrl,
+          });
+        } catch {
+          toast.error(`Đường dẫn không hợp lệ: "${trimmedUrl}" (phải bắt đầu bằng http:// hoặc https://)`);
+          return;
+        }
+      }
+    } else {
+      // Bulk paste mode
+      const lines = bulkText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      for (const line of lines) {
+        try {
+          new URL(line);
+          toAdd.push({
+            title: line,
+            url: line,
+          });
+        } catch {
+          toast.error(`Đường dẫn không hợp lệ trong danh sách: "${line}"`);
+          return;
+        }
+      }
     }
-    try {
-      new URL(linkUrl);
-    } catch {
-      toast.error("Đường dẫn không hợp lệ (phải bắt đầu bằng http:// hoặc https://).");
+
+    if (toAdd.length === 0) {
+      toast.error("Vui lòng nhập ít nhất một đường dẫn URL hợp lệ.");
       return;
     }
 
-    const linkItem: EvidenceItem = {
-      id: "temp-link-" + Date.now(),
+    const newItems: EvidenceItem[] = toAdd.map((item, idx) => ({
+      id: "temp-link-" + Date.now() + "-" + idx,
       revision_id: currentRevision?.id || "temp-rev",
       evidence_type: linkType,
-      file_name: linkTitle.trim() || linkUrl,
+      file_name: item.title,
       storage_path: null,
-      external_url: linkUrl.trim(),
+      external_url: item.url,
       mime_type: "text/uri-list",
       file_size: null,
       uploaded_by: null,
       created_at: new Date().toISOString(),
-    };
+    }));
 
-    setLocalEvidence((prev) => [...prev, linkItem]);
-    setLinkUrl("");
-    setLinkTitle("");
+    setLocalEvidence((prev) => [...prev, ...newItems]);
+    setLinkRows([{ id: Date.now().toString(), title: "", url: "" }]);
+    setBulkText("");
     setLinkDialogOpen(false);
-    toast.success("Đã thêm liên kết minh chứng!");
+    toast.success(`Đã thêm ${newItems.length} liên kết minh chứng!`);
+  };
+
+  const openLinkDialogForType = (type: EvidenceType) => {
+    setLinkType(type);
+    setLinkRows([{ id: Date.now().toString(), title: "", url: "" }]);
+    setBulkText("");
+    setInputTab("rows");
+    setLinkDialogOpen(true);
   };
 
   // Remove evidence
@@ -386,17 +426,68 @@ export function UnifiedCriteriaAccordion({
       {/* ============================================================ */}
       {isOpen && (
         <div className="border-t border-slate-200 p-4 sm:p-6 bg-slate-50/50">
-          {/* Admin Feedback Box if under revision */}
-          {status === "revision_requested" && reviewActions.length > 0 && (
-            <div className="mb-5 p-3.5 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-xs sm:text-sm">
-              <div className="flex items-center gap-2 font-semibold mb-1">
-                <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
-                <span>Ý kiến yêu cầu bổ sung từ Quản trị viên:</span>
+          {/* Admin Evaluation, Score & Remarks Box */}
+          {((submission?.admin_score !== null && submission?.admin_score !== undefined) || reviewActions.length > 0) && (
+            <div
+              className={cn(
+                "mb-5 p-4 rounded-xl border text-xs sm:text-sm transition-all shadow-2xs",
+                status === "verified"
+                  ? "bg-emerald-50/90 border-emerald-300 text-emerald-950"
+                  : status === "revision_requested"
+                  ? "bg-amber-50/90 border-amber-300 text-amber-950"
+                  : "bg-blue-50/90 border-blue-200 text-blue-950"
+              )}
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-2.5 mb-2.5 border-black/10">
+                <div className="flex items-center gap-2 font-bold">
+                  {status === "verified" ? (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 text-emerald-700 shrink-0" />
+                      <span>Kết quả thẩm định từ Hội đồng Đội</span>
+                    </>
+                  ) : status === "revision_requested" ? (
+                    <>
+                      <AlertCircle className="h-4 w-4 text-amber-700 shrink-0" />
+                      <span>Ý kiến yêu cầu bổ sung từ Hội đồng Đội</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="h-4 w-4 text-blue-700 shrink-0" />
+                      <span>Thông tin thẩm định từ Hội đồng Đội</span>
+                    </>
+                  )}
+                </div>
+
+                {/* Score comparison pill */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-slate-600">
+                    Điểm tự chấm: <strong>{currentRevision?.self_score ?? selfScore}đ</strong>
+                  </span>
+                  <span className="text-slate-300">•</span>
+                  <span className="text-xs font-bold text-emerald-800 bg-white/90 px-2.5 py-0.5 rounded border border-emerald-300 shadow-2xs">
+                    Điểm thẩm định:{" "}
+                    {submission?.admin_score !== null && submission?.admin_score !== undefined
+                      ? `${submission.admin_score} / ${maxScore}đ`
+                      : "Chưa chấm"}
+                  </span>
+                </div>
               </div>
-              <p className="pl-6 text-slate-700">
-                {reviewActions[reviewActions.length - 1].comment ||
-                  "Vui lòng kiểm tra và bổ sung đầy đủ các minh chứng còn thiếu."}
-              </p>
+
+              {/* Latest Comment / Remarks */}
+              {reviewActions.length > 0 && reviewActions[reviewActions.length - 1].comment ? (
+                <div className="space-y-1">
+                  <div className="font-semibold text-slate-800 text-xs">
+                    Nhận xét & Ý kiến đánh giá của Hội đồng:
+                  </div>
+                  <p className="bg-white/95 p-3 rounded-lg border border-slate-200 text-slate-800 leading-relaxed font-normal whitespace-pre-line text-xs shadow-2xs">
+                    {reviewActions[reviewActions.length - 1].comment}
+                  </p>
+                </div>
+              ) : status === "verified" ? (
+                <p className="text-xs text-emerald-800">
+                  Hồ sơ minh chứng đã được Hội đồng thẩm định và phê duyệt đạt yêu cầu.
+                </p>
+              ) : null}
             </div>
           )}
 
@@ -706,10 +797,7 @@ export function UnifiedCriteriaAccordion({
                       isEditable={isEditableUser}
                       onUploadImage={(e) => handleFileUpload("doc1", e)}
                       onUploadFile={(e) => handleFileUpload("doc1", e)}
-                      onOpenAddLink={() => {
-                        setLinkType("doc1");
-                        setLinkDialogOpen(true);
-                      }}
+                      onOpenAddLink={() => openLinkDialogForType("doc1")}
                       onRemove={handleRemoveEvidence}
                       onViewFile={handleViewFile}
                     />
@@ -725,10 +813,7 @@ export function UnifiedCriteriaAccordion({
                       isEditable={isEditableUser}
                       onUploadImage={(e) => handleFileUpload("doc2", e)}
                       onUploadFile={(e) => handleFileUpload("doc2", e)}
-                      onOpenAddLink={() => {
-                        setLinkType("doc2");
-                        setLinkDialogOpen(true);
-                      }}
+                      onOpenAddLink={() => openLinkDialogForType("doc2")}
                       onRemove={handleRemoveEvidence}
                       onViewFile={handleViewFile}
                     />
@@ -744,10 +829,7 @@ export function UnifiedCriteriaAccordion({
                       isEditable={isEditableUser}
                       onUploadImage={(e) => handleFileUpload("link3", e)}
                       onUploadFile={(e) => handleFileUpload("link3", e)}
-                      onOpenAddLink={() => {
-                        setLinkType("link3");
-                        setLinkDialogOpen(true);
-                      }}
+                      onOpenAddLink={() => openLinkDialogForType("link3")}
                       onRemove={handleRemoveEvidence}
                       onViewFile={handleViewFile}
                     />
@@ -760,44 +842,136 @@ export function UnifiedCriteriaAccordion({
       )}
 
       {/* ============================================================ */}
-      {/* DIALOG: ADD EVIDENCE LINK */}
+      {/* DIALOG: ADD EVIDENCE LINK (SUPPORTS MULTIPLE LINKS) */}
       {/* ============================================================ */}
       <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col p-5">
           <DialogHeader>
-            <DialogTitle>Thêm liên kết minh chứng</DialogTitle>
-            <DialogDescription>
-              Nhập đường dẫn trang tin, mạng xã hội, hoặc thư mục lưu trữ đám mây.
+            <DialogTitle className="text-base sm:text-lg flex items-center gap-2">
+              <LinkIcon className="h-4 w-4 text-emerald-700" />
+              Thêm liên kết minh chứng
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Bạn có thể thêm một hoặc nhiều liên kết (Google Drive, Fanpage, tin bài, văn bản điện tử) cùng một lúc.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 py-2 text-xs">
-            <div>
-              <Label className="text-xs">Tiêu đề / Tên liên kết</Label>
-              <Input
-                placeholder="VD: Bài viết hoạt động trên Fanpage / Bảng tin Liên đội"
-                value={linkTitle}
-                onChange={(e) => setLinkTitle(e.target.value)}
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label className="text-xs">Đường dẫn URL *</Label>
-              <Input
-                placeholder="https://facebook.com/... hoặc https://drive.google.com/..."
-                value={linkUrl}
-                onChange={(e) => setLinkUrl(e.target.value)}
-                className="mt-1"
-              />
-            </div>
+          {/* Tab selector */}
+          <div className="flex border-b border-slate-200 gap-4 text-xs font-semibold pt-1">
+            <button
+              type="button"
+              onClick={() => setInputTab("rows")}
+              className={cn(
+                "pb-2 border-b-2 transition-colors cursor-pointer",
+                inputTab === "rows"
+                  ? "border-emerald-700 text-emerald-800"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              )}
+            >
+              Thêm từng liên kết (kèm tên)
+            </button>
+            <button
+              type="button"
+              onClick={() => setInputTab("bulk")}
+              className={cn(
+                "pb-2 border-b-2 transition-colors cursor-pointer",
+                inputTab === "bulk"
+                  ? "border-emerald-700 text-emerald-800"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              )}
+            >
+              Dán nhanh nhiều link (1 link/dòng)
+            </button>
           </div>
 
-          <DialogFooter>
+          <div className="flex-1 overflow-y-auto py-2 space-y-3 text-xs">
+            {inputTab === "rows" ? (
+              <div className="space-y-3">
+                {linkRows.map((row, idx) => (
+                  <div key={row.id} className="p-3 rounded-lg border border-slate-200 bg-slate-50/60 space-y-2 relative">
+                    <div className="flex items-center justify-between text-slate-600 font-medium">
+                      <span>Liên kết #{idx + 1}</span>
+                      {linkRows.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setLinkRows((prev) => prev.filter((r) => r.id !== row.id))}
+                          className="text-slate-400 hover:text-red-600 p-0.5 cursor-pointer"
+                          title="Xóa dòng này"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <div>
+                      <Input
+                        placeholder="Tiêu đề / Tên liên kết (VD: Bài viết ngày Hội Đội)"
+                        value={row.title}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setLinkRows((prev) =>
+                            prev.map((r) => (r.id === row.id ? { ...r, title: val } : r))
+                          );
+                        }}
+                        className="text-xs bg-white"
+                      />
+                    </div>
+                    <div>
+                      <Input
+                        placeholder="Đường dẫn URL * (VD: https://facebook.com/...)"
+                        value={row.url}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setLinkRows((prev) =>
+                            prev.map((r) => (r.id === row.id ? { ...r, url: val } : r))
+                          );
+                        }}
+                        className="text-xs bg-white"
+                      />
+                    </div>
+                  </div>
+                ))}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setLinkRows((prev) => [...prev, { id: Date.now().toString(), title: "", url: "" }])
+                  }
+                  className="w-full text-xs border-dashed border-slate-300 text-slate-600 hover:text-slate-900 gap-1"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Thêm liên kết khác
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label className="text-xs text-slate-700 font-medium">Danh sách đường dẫn (Mỗi dòng 1 URL)</Label>
+                <Textarea
+                  placeholder={`https://facebook.com/benluc/posts/123\nhttps://drive.google.com/file/d/abc\nhttps://doanthanhnien.vn/tin-tuc/...`}
+                  rows={6}
+                  value={bulkText}
+                  onChange={(e) => setBulkText(e.target.value)}
+                  className="text-xs font-mono bg-white"
+                />
+                <p className="text-[11px] text-slate-500">
+                  Dán trực tiếp danh sách các link vào đây. Hệ thống sẽ tự động tạo từng mục minh chứng cho mỗi đường dẫn.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="pt-2 border-t flex items-center justify-between sm:justify-end gap-2">
             <Button variant="outline" size="sm" onClick={() => setLinkDialogOpen(false)}>
               Hủy
             </Button>
-            <Button size="sm" onClick={handleAddLink}>
-              Thêm liên kết
+            <Button
+              size="sm"
+              onClick={handleAddMultipleLinks}
+              className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs gap-1"
+            >
+              <LinkIcon className="h-3.5 w-3.5" />
+              Thêm các liên kết
             </Button>
           </DialogFooter>
         </DialogContent>

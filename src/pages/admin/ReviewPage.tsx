@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
@@ -480,11 +480,11 @@ export default function ReviewPage() {
       // Notify organization users
       await notifyUsers({
         organizationIds: [orgId],
-        title: `Tiêu chí ${criterion.code_snapshot} đã được xác thực`,
-        message: `Hội đồng đã thẩm định tiêu chí "${criterion.title_snapshot}". Điểm chính thức: ${officialScore}đ.`,
+        title: `Hội đồng đã thẩm định & chấm điểm tiêu chí ${criterion.code_snapshot}`,
+        message: `Hội đồng đã thẩm định tiêu chí "${criterion.title_snapshot}". Điểm chính thức: ${officialScore}đ.${comment ? ` Nhận xét: "${comment}"` : ""}`,
         type: "verified",
         relatedId: subId,
-        url: "/user/results",
+        url: "/user/criteria",
       });
 
       toast.success(`Đã xác thực và cho điểm cuối cùng (${officialScore}đ) thành công!`);
@@ -538,7 +538,7 @@ export default function ReviewPage() {
       await notifyUsers({
         organizationIds: [orgId],
         title: `Yêu cầu bổ sung minh chứng tiêu chí ${criterion.code_snapshot}`,
-        message: `Ý kiến Hội đồng: ${comment}`,
+        message: `Hội đồng yêu cầu bổ sung minh chứng cho tiêu chí "${criterion.title_snapshot}". Nhận xét: "${comment}".`,
         type: "revision_requested",
         relatedId: submissionId,
         url: "/user/criteria",
@@ -1279,16 +1279,35 @@ function AdminUnitGradingDetail({
   const hasLink3 = !!criterion.req_link3;
   const hasAnyReq = hasDoc1 || hasDoc2 || hasLink3;
 
+  const latestAction =
+    unit.reviewActions && unit.reviewActions.length > 0
+      ? unit.reviewActions[unit.reviewActions.length - 1]
+      : null;
+
   const [score, setScore] = useState<number>(
     unit.submission?.admin_score ?? selfScore
   );
-  const [comment, setComment] = useState<string>("");
+  const [comment, setComment] = useState<string>(latestAction?.comment || "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [reopenDialogOpen, setReopenDialogOpen] = useState(false);
   const [reopenReason, setReopenReason] = useState("");
 
   const status = unit.submission?.status || "draft";
   const isVerified = status === "verified";
+
+  useEffect(() => {
+    if (unit.submission?.admin_score !== undefined && unit.submission?.admin_score !== null) {
+      setScore(unit.submission.admin_score);
+    } else {
+      setScore(selfScore);
+    }
+  }, [unit.submission?.admin_score, selfScore]);
+
+  useEffect(() => {
+    if (latestAction?.comment) {
+      setComment(latestAction.comment);
+    }
+  }, [latestAction?.comment]);
 
   // Filter evidence by category
   const doc1Items = unit.evidenceItems.filter((e) => e.evidence_type === "doc1");
@@ -1402,8 +1421,11 @@ function AdminUnitGradingDetail({
           <div className="flex flex-wrap gap-2 pt-2">
             <Button
               size="sm"
-              className="bg-[#2e7d32] hover:bg-[#256629] text-white gap-1 flex-1 text-xs"
-              disabled={isSubmitting || isVerified}
+              className={cn(
+                "text-white gap-1 flex-1 text-xs",
+                isVerified ? "bg-emerald-700 hover:bg-emerald-800" : "bg-[#2e7d32] hover:bg-[#256629]"
+              )}
+              disabled={isSubmitting}
               onClick={async () => {
                 if (score < 0 || score > maxScore) {
                   toast.error(`Điểm thẩm định phải từ 0 đến ${maxScore}`);
@@ -1423,7 +1445,7 @@ function AdminUnitGradingDetail({
               }}
             >
               <CheckCircle2 className="h-3.5 w-3.5" />
-              Xác thực (Cho điểm)
+              {isVerified ? "Cập nhật điểm & Nhận xét" : "Xác thực (Cho điểm)"}
             </Button>
 
             <Button
@@ -1463,7 +1485,7 @@ function AdminUnitGradingDetail({
                 onClick={() => setReopenDialogOpen(true)}
               >
                 <RotateCcw className="h-3.5 w-3.5" />
-                Mở lại thẩm định
+                Mở lại thẩm định (chuyển về chờ nộp)
               </Button>
             )}
           </div>

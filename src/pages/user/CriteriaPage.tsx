@@ -90,7 +90,7 @@ async function fetchUserSubmissions(periodId: string, orgId?: string | null) {
     .eq("organization_id", orgId)
     .maybeSingle();
 
-  if (!orgPeriod) return { submissions: [], revisions: [], evidence: [] };
+  if (!orgPeriod) return { submissions: [], revisions: [], evidence: [], reviewActions: [] };
 
   const { data: subs } = await supabase
     .from("submissions")
@@ -99,12 +99,17 @@ async function fetchUserSubmissions(periodId: string, orgId?: string | null) {
 
   const subIds = (subs ?? []).map((s) => s.id);
 
-  const [revRes, evRes] = await Promise.all([
+  const [revRes, evRes, actionRes] = await Promise.all([
     supabase
       .from("submission_revisions")
       .select("*")
       .in("submission_id", subIds.length ? subIds : ["00000000-0000-0000-0000-000000000000"]),
     supabase.from("evidence_items").select("*"),
+    supabase
+      .from("review_actions")
+      .select("*")
+      .in("submission_id", subIds.length ? subIds : ["00000000-0000-0000-0000-000000000000"])
+      .order("created_at", { ascending: true }),
   ]);
 
   return {
@@ -112,6 +117,7 @@ async function fetchUserSubmissions(periodId: string, orgId?: string | null) {
     submissions: (subs ?? []) as Submission[],
     revisions: (revRes.data ?? []) as SubmissionRevision[],
     evidence: (evRes.data ?? []) as EvidenceItem[],
+    reviewActions: (actionRes.data ?? []) as ReviewAction[],
   };
 }
 
@@ -206,12 +212,14 @@ export default function UserCriteriaPage() {
       const sub = subData?.submissions.find((s) => s.period_criteria_id === c.id);
       const rev = sub ? subData?.revisions.find((r) => r.id === sub.current_revision_id) : null;
       const ev = rev ? subData?.evidence.filter((e) => e.revision_id === rev.id) : [];
+      const actions = sub ? (subData?.reviewActions ?? []).filter((a) => a.submission_id === sub.id) : [];
 
       return {
         criterion: c,
         submission: sub,
         currentRevision: rev,
         evidenceItems: ev,
+        reviewActions: actions,
       };
     });
   }, [criteria, subData]);
@@ -416,8 +424,8 @@ export default function UserCriteriaPage() {
 
     // 7. Notify Admins when submitted
     if (targetStatus === "submitted") {
-      const title = `Liên đội nộp minh chứng: ${crit?.criterion.code_snapshot || ""}`;
-      const message = `${profile.display_name || "Liên đội"} vừa nộp minh chứng tiêu chí "${crit?.criterion.title_snapshot || ""}". Điểm tự chấm: ${selfScore}đ.`;
+      const title = `Liên đội nộp minh chứng & tự chấm: ${crit?.criterion.code_snapshot || ""}`;
+      const message = `Liên đội ${profile.display_name || "đơn vị"} vừa nộp ${evidence.length} minh chứng cho tiêu chí "${crit?.criterion.title_snapshot || ""}". Điểm tự chấm: ${selfScore}đ.`;
 
       await notifyAdmins({
         title,
