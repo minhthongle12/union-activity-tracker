@@ -16,6 +16,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -35,9 +45,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Plus,
   Search,
-  Pencil,
   Users,
   KeyRound,
+  Trash2,
   Loader2,
   ShieldCheck,
   Building,
@@ -78,6 +88,7 @@ export default function UsersPage() {
   const [filterOrg, setFilterOrg] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
   const [newPassword, setNewPassword] = useState("");
 
@@ -103,33 +114,42 @@ export default function UsersPage() {
   // Create user mutation
   const createMutation = useMutation({
     mutationFn: async (values: typeof form) => {
-      // 1. Create auth user via Supabase Admin (this would ideally be an Edge Function)
-      //    For now, create with email pattern
-      const email = `${values.username.trim().toLowerCase()}@union.internal`;
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password: values.password,
-      });
-      if (authError) throw authError;
-      if (!authData.user) throw new Error("Không thể tạo tài khoản");
+      const normalizedUsername = values.username.trim().toLowerCase();
 
-      // 2. Create profile
-      const { error: profileError } = await supabase.from("profiles").insert({
-        id: authData.user.id,
-        username: values.username.trim().toLowerCase(),
-        display_name: values.display_name.trim(),
-        role: values.role,
-        organization_id: values.role === "user" ? values.organization_id : null,
+      // 1. Try database RPC first
+      const { data, error: rpcError } = await supabase.rpc("admin_create_user", {
+        p_username: normalizedUsername,
+        p_password: values.password,
+        p_display_name: values.display_name.trim(),
+        p_role: values.role,
+        p_organization_id: values.role === "user" ? values.organization_id : null,
       });
-      if (profileError) throw profileError;
+
+      if (rpcError) {
+        // 2. Try Edge function fallback
+        const { error: fnError } = await supabase.functions.invoke("admin-users", {
+          body: {
+            action: "create_user",
+            username: normalizedUsername,
+            password: values.password,
+            display_name: values.display_name.trim(),
+            role: values.role,
+            organization_id: values.role === "user" ? values.organization_id : null,
+          },
+        });
+
+        if (fnError) {
+          throw new Error(rpcError.message || fnError.message);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["profiles"] });
-      toast.success("Đã tạo tài khoản mới");
+      toast.success("Đã tạo tài khoản mới thành công!");
       closeDialog();
     },
     onError: (err: Error) => {
-      toast.error("Lỗi: " + err.message);
+      toast.error("Lỗi khi tạo tài khoản: " + err.message);
     },
   });
 
@@ -149,21 +169,57 @@ export default function UsersPage() {
     onError: (err: Error) => toast.error("Lỗi: " + err.message),
   });
 
-  // Reset password (would normally use an Edge Function)
+  // Reset password
   const resetMutation = useMutation({
     mutationFn: async ({ userId, password }: { userId: string; password: string }) => {
-      // This requires admin privileges via Edge Function in production
-      const { error } = await supabase.auth.admin.updateUserById(userId, {
-        password,
+      const { error: rpcError } = await supabase.rpc("admin_reset_password", {
+        p_user_id: userId,
+        p_new_password: password,
       });
-      if (error) throw error;
+
+      if (rpcError) {
+        const { error: fnError } = await supabase.functions.invoke("admin-users", {
+          body: {
+            action: "reset_password",
+            userId,
+            newPassword: password,
+          },
+        });
+        if (fnError) throw new Error(rpcError.message || fnError.message);
+      }
     },
     onSuccess: () => {
-      toast.success("Đã đặt lại mật khẩu");
+      toast.success("Đã đặt lại mật khẩu thành công!");
       setResetDialogOpen(false);
       setNewPassword("");
     },
     onError: (err: Error) => toast.error("Lỗi: " + err.message),
+  });
+
+  // Delete user
+  const deleteMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const { error: rpcError } = await supabase.rpc("admin_delete_user", {
+        p_user_id: userId,
+      });
+
+      if (rpcError) {
+        const { error: fnError } = await supabase.functions.invoke("admin-users", {
+          body: {
+            action: "delete_user",
+            userId,
+          },
+        });
+        if (fnError) throw new Error(rpcError.message || fnError.message);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["profiles"] });
+      toast.success("Đã xoá tài khoản thành công!");
+      setDeleteDialogOpen(false);
+      setSelectedUser(null);
+    },
+    onError: (err: Error) => toast.error("Lỗi xoá tài khoản: " + err.message),
   });
 
   function openCreate() {
@@ -179,6 +235,11 @@ export default function UsersPage() {
     setSelectedUser(user);
     setNewPassword("");
     setResetDialogOpen(true);
+  }
+
+  function openDeleteUser(user: Profile) {
+    setSelectedUser(user);
+    setDeleteDialogOpen(true);
   }
 
   function handleCreate() {
@@ -345,6 +406,15 @@ export default function UsersPage() {
                           >
                             <KeyRound className="h-4 w-4" />
                           </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openDeleteUser(user)}
+                            title="Xoá tài khoản"
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -494,6 +564,37 @@ export default function UsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete User Confirmation Alert Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xác nhận xoá tài khoản?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bạn có chắc chắn muốn xoá tài khoản{" "}
+              <span className="font-semibold text-slate-900">
+                @{selectedUser?.username} ({selectedUser?.display_name})
+              </span>
+              ? Hành động này không thể hoàn tác và sẽ xoá bỏ quyền truy cập của người dùng.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={deleteMutation.isPending}
+              onClick={() => {
+                if (selectedUser) {
+                  deleteMutation.mutate(selectedUser.id);
+                }
+              }}
+            >
+              {deleteMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Xoá tài khoản
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

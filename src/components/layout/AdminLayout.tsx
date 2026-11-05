@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";
 import {
   LayoutDashboard,
   Building2,
@@ -52,6 +54,22 @@ export function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { profile, logout } = useAuth();
   const navigate = useNavigate();
+
+  const { data: unreadCount } = useQuery({
+    queryKey: ["unread_notifications_admin", profile?.id],
+    queryFn: async () => {
+      if (!profile?.id) return 0;
+      const { count, error } = await supabase
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("recipient_id", profile.id)
+        .eq("is_read", false);
+      if (error) return 0;
+      return count ?? 0;
+    },
+    enabled: !!profile?.id,
+    refetchInterval: 30000,
+  });
 
   const handleLogout = async () => {
     await logout();
@@ -174,10 +192,11 @@ export function AdminLayout() {
             <NavLink to="/admin/notifications">
               <Button variant="ghost" size="icon" className="relative text-slate-600 hover:text-slate-900">
                 <Bell className="h-5 w-5" />
-                <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                </span>
+                {(unreadCount ?? 0) > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white shadow-xs">
+                    {unreadCount! > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
               </Button>
             </NavLink>
 

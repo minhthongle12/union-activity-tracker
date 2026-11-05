@@ -1,0 +1,21 @@
+# Dependencies
+node_modules
+/.pnp
+.pnp.js
+
+# Production build
+dist
+dist-ssr
+
+# Environment variables
+.env.local
+.env.*.local
+
+# Vite cache
+.vite
+
+# System
+.DS_Store
+Thumbs.db
+*.tsbuildinfo
+

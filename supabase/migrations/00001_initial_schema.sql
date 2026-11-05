@@ -1216,12 +1216,12 @@ BEGIN
         (gen_random_uuid(), 'DCS-01', 'Đoàn phường Tân Định', 'Đoàn TNCS HCM phường Tân Định, Quận 1', 'Nguyễn Văn A', '0901234567'),
         (gen_random_uuid(), 'DCS-02', 'Đoàn phường Đa Kao', 'Đoàn TNCS HCM phường Đa Kao, Quận 1', 'Trần Thị B', '0912345678'),
         (gen_random_uuid(), 'DCS-03', 'Đoàn phường Bến Nghé', 'Đoàn TNCS HCM phường Bến Nghé, Quận 1', 'Lê Văn C', '0923456789')
-    RETURNING id INTO v_org1_id; -- Chỉ lấy id cuối cùng
+    ON CONFLICT (code) DO NOTHING;
 
     -- Lấy lại IDs theo code
-    SELECT id INTO v_org1_id FROM public.organizations WHERE code = 'DCS-01';
-    SELECT id INTO v_org2_id FROM public.organizations WHERE code = 'DCS-02';
-    SELECT id INTO v_org3_id FROM public.organizations WHERE code = 'DCS-03';
+    SELECT id INTO v_org1_id FROM public.organizations WHERE code = 'DCS-01' LIMIT 1;
+    SELECT id INTO v_org2_id FROM public.organizations WHERE code = 'DCS-02' LIMIT 1;
+    SELECT id INTO v_org3_id FROM public.organizations WHERE code = 'DCS-03' LIMIT 1;
 
     -- --------------------------------------------------------
     -- Tạo nhóm tiêu chí mẫu
@@ -1230,11 +1230,12 @@ BEGIN
     VALUES
         (gen_random_uuid(), 'NC1', 'Nhóm 1: Công tác tổ chức', 'Các tiêu chí về công tác tổ chức Đoàn', 1),
         (gen_random_uuid(), 'NC2', 'Nhóm 2: Phong trào thanh niên', 'Các tiêu chí về phong trào thanh niên', 2),
-        (gen_random_uuid(), 'NC3', 'Nhóm 3: Công tác tuyên truyền', 'Các tiêu chí về công tác tuyên truyền giáo dục', 3);
+        (gen_random_uuid(), 'NC3', 'Nhóm 3: Công tác tuyên truyền', 'Các tiêu chí về công tác tuyên truyền giáo dục', 3)
+    ON CONFLICT DO NOTHING;
 
-    SELECT id INTO v_cat1_id FROM public.criteria_categories WHERE code = 'NC1';
-    SELECT id INTO v_cat2_id FROM public.criteria_categories WHERE code = 'NC2';
-    SELECT id INTO v_cat3_id FROM public.criteria_categories WHERE code = 'NC3';
+    SELECT id INTO v_cat1_id FROM public.criteria_categories WHERE code = 'NC1' LIMIT 1;
+    SELECT id INTO v_cat2_id FROM public.criteria_categories WHERE code = 'NC2' LIMIT 1;
+    SELECT id INTO v_cat3_id FROM public.criteria_categories WHERE code = 'NC3' LIMIT 1;
 
     -- --------------------------------------------------------
     -- Tạo tiêu chí mẫu trong thư viện gốc
@@ -1282,7 +1283,8 @@ BEGIN
         (v_cat3_id, '3.2', 'Sinh hoạt chính trị',
          'Tổ chức sinh hoạt chính trị tư tưởng cho đoàn viên',
          'Đủ 4 buổi/năm: 5 điểm. Mỗi buổi thiếu trừ 1.25 điểm.',
-         5.00, TRUE, TRUE, FALSE, 'Ban Tuyên giáo', 2);
+         5.00, TRUE, TRUE, FALSE, 'Ban Tuyên giáo', 2)
+    ON CONFLICT (code) DO NOTHING;
 
     RAISE NOTICE 'Seed data created successfully!';
     RAISE NOTICE 'Organizations: DCS-01, DCS-02, DCS-03';

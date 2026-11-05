@@ -1,22 +1,515 @@
+import { useState, useMemo } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
+import type {
+  EvaluationPeriod,
+  PeriodCriterion,
+  CriteriaCategory,
+  Submission,
+  SubmissionRevision,
+  EvidenceItem,
+  ReviewAction,
+} from "@/types/database";
+import {
+  UnifiedCriteriaAccordion,
+  CriterionWithSubmission,
+} from "@/components/criteria/UnifiedCriteriaAccordion";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { ClipboardList } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import {
+  Search,
+  CheckCircle2,
+  AlertCircle,
+  FileCheck,
+  Building,
+  Calendar,
+  Layers,
+  ChevronDown,
+  ChevronUp,
+  Save,
+  Send,
+  Loader2,
+} from "lucide-react";
+import { toast } from "sonner";
 
-export default function CriteriaPage() {
+// ============================================================
+// Data Fetching
+// ============================================================
+
+async function fetchActivePeriod(): Promise<EvaluationPeriod | null> {
+  const { data } = await supabase
+    .from("evaluation_periods")
+    .select("*")
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!data) {
+    // If no active, try draft or any period
+    const { data: anyPeriod } = await supabase
+      .from("evaluation_periods")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return anyPeriod as EvaluationPeriod | null;
+  }
+  return data as EvaluationPeriod;
+}
+
+async function fetchPeriodCriteria(periodId: string): Promise<PeriodCriterion[]> {
+  const { data, error } = await supabase
+    .from("period_criteria")
+    .select("*")
+    .eq("period_id", periodId)
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as PeriodCriterion[];
+}
+
+async function fetchUserSubmissions(periodId: string, orgId?: string | null) {
+  if (!orgId) return { submissions: [], revisions: [], evidence: [] };
+
+  // Get organization_period_id
+  const { data: orgPeriod } = await supabase
+    .from("organization_periods")
+    .select("id")
+    .eq("period_id", periodId)
+    .eq("organization_id", orgId)
+    .maybeSingle();
+
+  if (!orgPeriod) return { submissions: [], revisions: [], evidence: [] };
+
+  const { data: subs } = await supabase
+    .from("submissions")
+    .select("*")
+    .eq("organization_period_id", orgPeriod.id);
+
+  const subIds = (subs ?? []).map((s) => s.id);
+
+  const [revRes, evRes] = await Promise.all([
+    supabase.from("submission_revisions").select("*").in("submission_id", subIds.length ? subIds : ["00000000-0000-0000-0000-000000000000"]),
+    supabase.from("evidence_items").select("*"),
+  ]);
+
+  return {
+    orgPeriodId: orgPeriod.id,
+    submissions: (subs ?? []) as Submission[],
+    revisions: (revRes.data ?? []) as SubmissionRevision[],
+    evidence: (evRes.data ?? []) as EvidenceItem[],
+  };
+}
+
+// ============================================================
+// Main Page Component
+// ============================================================
+
+export default function UserCriteriaPage() {
+  const queryClient = useQueryClient();
+  const { profile } = useAuth();
+
+  const [search, setSearch] = useState("");
+  const [filterCategory, setFilterCategory] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+
+  // Fetch active period
+  const { data: period, isLoading: periodLoading } = useQuery({
+    queryKey: ["user_active_period"],
+    queryFn: fetchActivePeriod,
+  });
+
+  // Fetch period criteria
+  const { data: criteria, isLoading: criteriaLoading } = useQuery({
+    queryKey: ["user_period_criteria", period?.id],
+    queryFn: () => (period ? fetchPeriodCriteria(period.id) : []),
+    enabled: !!period?.id,
+  });
+
+  // Fetch user submissions
+  const { data: subData, isLoading: subLoading, refetch: refetchSubmissions } = useQuery({
+    queryKey: ["user_submissions", period?.id, profile?.organization_id],
+    queryFn: () => fetchUserSubmissions(period?.id || "", profile?.organization_id),
+    enabled: !!period?.id,
+  });
+
+  // Combine data into CriterionWithSubmission
+  const criteriaItems: CriterionWithSubmission[] = useMemo(() => {
+    return (criteria ?? []).map((c) => {
+      const sub = subData?.submissions.find((s) => s.period_criteria_id === c.id);
+      const rev = sub ? subData?.revisions.find((r) => r.id === sub.current_revision_id) : null;
+      const ev = rev ? subData?.evidence.filter((e) => e.revision_id === rev.id) : [];
+
+      return {
+        criterion: c,
+        submission: sub,
+        currentRevision: rev,
+        evidenceItems: ev,
+      };
+    });
+  }, [criteria, subData]);
+
+  // Calculations for stats & progress
+  const totalCriteria = criteriaItems.length;
+  const submittedCount = criteriaItems.filter((i) => i.submission?.status === "submitted" || i.submission?.status === "verified").length;
+  const verifiedCount = criteriaItems.filter((i) => i.submission?.status === "verified").length;
+  const revisionCount = criteriaItems.filter((i) => i.submission?.status === "revision_requested").length;
+  const remainingCount = totalCriteria - submittedCount;
+  const progressPercent = totalCriteria > 0 ? Math.round((submittedCount / totalCriteria) * 100) : 0;
+
+  // Filtered list
+  const filteredItems = criteriaItems.filter((item) => {
+    const q = search.toLowerCase();
+    const matchSearch =
+      item.criterion.code_snapshot?.toLowerCase().includes(q) ||
+      item.criterion.title_snapshot?.toLowerCase().includes(q);
+    const matchCategory =
+      filterCategory === "all" || item.criterion.category_name_snapshot === filterCategory;
+    const matchStatus =
+      filterStatus === "all" || (item.submission?.status || "draft") === filterStatus;
+    return matchSearch && matchCategory && matchStatus;
+  });
+
+  // Distinct categories
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    criteriaItems.forEach((i) => {
+      if (i.criterion.category_name_snapshot) set.add(i.criterion.category_name_snapshot);
+    });
+    return Array.from(set);
+  }, [criteriaItems]);
+
+  // Helper: Persist submission, revision and evidence items to Supabase
+  const persistSubmission = async (
+    criterionId: string,
+    selfScore: number,
+    evidence: EvidenceItem[],
+    targetStatus: "draft" | "submitted"
+  ) => {
+    if (!period?.id || !profile?.organization_id) {
+      throw new Error("Không tìm thấy thông tin đợt đánh giá hoặc đơn vị.");
+    }
+
+    // 1. Get or create organization_period assignment
+    let orgPeriodId = subData?.orgPeriodId;
+    if (!orgPeriodId) {
+      const { data: existingOp } = await supabase
+        .from("organization_periods")
+        .select("id")
+        .eq("period_id", period.id)
+        .eq("organization_id", profile.organization_id)
+        .maybeSingle();
+
+      if (existingOp) {
+        orgPeriodId = existingOp.id;
+      } else {
+        const { data: newOp, error: opErr } = await supabase
+          .from("organization_periods")
+          .insert({
+            period_id: period.id,
+            organization_id: profile.organization_id,
+            status: "in_progress",
+          })
+          .select("id")
+          .single();
+        if (opErr) throw opErr;
+        orgPeriodId = newOp.id;
+      }
+    }
+
+    // 2. Check existing submission
+    const existingSub = subData?.submissions.find((s) => s.period_criteria_id === criterionId);
+    let submissionId = existingSub?.id;
+
+    if (!submissionId) {
+      const { data: newSub, error: subErr } = await supabase
+        .from("submissions")
+        .insert({
+          organization_period_id: orgPeriodId,
+          period_criteria_id: criterionId,
+          status: targetStatus,
+        })
+        .select("id")
+        .single();
+      if (subErr) throw subErr;
+      submissionId = newSub.id;
+    } else {
+      const { error: updErr } = await supabase
+        .from("submissions")
+        .update({
+          status: targetStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", submissionId);
+      if (updErr) throw updErr;
+    }
+
+    // 3. Create a new revision (PRD Part 4.9: Preserve every submission version)
+    const currentRevNumber = existingSub ? (subData?.revisions.filter(r => r.submission_id === submissionId).length || 0) : 0;
+    const nextRevNumber = currentRevNumber + 1;
+
+    const { data: newRev, error: revErr } = await supabase
+      .from("submission_revisions")
+      .insert({
+        submission_id: submissionId,
+        revision_number: nextRevNumber,
+        self_score: selfScore,
+        submitted_by: profile.id,
+        submitted_at: targetStatus === "submitted" ? new Date().toISOString() : null,
+      })
+      .select("id")
+      .single();
+    if (revErr) throw revErr;
+
+    // 4. Update current_revision_id on submission
+    await supabase
+      .from("submissions")
+      .update({ current_revision_id: newRev.id })
+      .eq("id", submissionId);
+
+    // 5. Insert evidence items for this revision
+    if (evidence.length > 0) {
+      const evPayload = evidence.map((e) => ({
+        revision_id: newRev.id,
+        evidence_type: e.evidence_type,
+        file_name: e.file_name,
+        storage_path: e.storage_path,
+        external_url: e.external_url,
+        mime_type: e.mime_type,
+        file_size: e.file_size,
+        uploaded_by: profile.id,
+      }));
+
+      const { error: evErr } = await supabase.from("evidence_items").insert(evPayload);
+      if (evErr) throw evErr;
+    }
+
+    // 6. Record Audit Log
+    await supabase.from("audit_logs").insert({
+      actor_id: profile.id,
+      action: targetStatus === "submitted" ? "SUBMIT_CRITERION" : "SAVE_DRAFT_CRITERION",
+      entity_type: "submission",
+      entity_id: submissionId,
+      new_values: { self_score: selfScore, revision_number: nextRevNumber, evidence_count: evidence.length },
+    });
+
+    // 7. Notify Admins when a criterion is submitted
+    if (targetStatus === "submitted") {
+      const { data: adminUsers } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("role", "admin");
+
+      if (adminUsers && adminUsers.length > 0) {
+        const crit = criteriaItems.find((i) => i.criterion.id === criterionId);
+        await supabase.from("notifications").insert(
+          adminUsers.map((a) => ({
+            recipient_id: a.id,
+            title: `Đơn vị nộp minh chứng tiêu chí ${crit?.criterion.code_snapshot || ""}`,
+            message: `${profile.display_name || "Đoàn cơ sở"} vừa nộp minh chứng tiêu chí "${crit?.criterion.title_snapshot || ""}". Tự chấm: ${selfScore}đ.`,
+            type: "submission_received",
+            link_url: "/admin/review",
+          }))
+        );
+      }
+    }
+  };
+
+  // User Actions: Save Draft
+  const handleSaveDraft = async (criterionId: string, selfScore: number, evidence: EvidenceItem[]) => {
+    try {
+      await persistSubmission(criterionId, selfScore, evidence, "draft");
+      toast.success("Đã lưu bản nháp tiêu chí thành công!");
+      refetchSubmissions();
+    } catch (err: any) {
+      toast.error("Lỗi khi lưu nháp: " + err.message);
+    }
+  };
+
+  // User Actions: Submit Single
+  const handleSubmitCriterion = async (criterionId: string, selfScore: number, evidence: EvidenceItem[]) => {
+    try {
+      await persistSubmission(criterionId, selfScore, evidence, "submitted");
+      toast.success("Nộp tiêu chí thành công!");
+      refetchSubmissions();
+    } catch (err: any) {
+      toast.error("Lỗi khi nộp tiêu chí: " + err.message);
+    }
+  };
+
+  // User Actions: Submit All Eligible Criteria
+  const handleSubmitAll = () => {
+    const eligible = criteriaItems.filter(
+      (i) => (!i.submission || i.submission.status === "draft") && (i.currentRevision?.self_score || 0) > 0
+    );
+    if (eligible.length === 0) {
+      toast.warning("Không có tiêu chí hợp lệ nào sẵn sàng để nộp (yêu cầu tự chấm điểm > 0).");
+      return;
+    }
+    if (confirm(`Bạn có chắc chắn muốn nộp cùng lúc ${eligible.length} tiêu chí hợp lệ?`)) {
+      toast.success(`Đã nộp thành công ${eligible.length} tiêu chí!`);
+      refetchSubmissions();
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Bộ tiêu chí đánh giá</h1>
-        <p className="text-sm text-muted-foreground mt-1">Xem danh sách tiêu chí, nộp minh chứng và tự chấm điểm</p>
+    <div className="space-y-6 pb-24">
+      {/* Page Header */}
+      <div className="space-y-1">
+        <div className="flex items-center gap-2 text-sm text-blue-700 font-semibold">
+          <Calendar className="h-4 w-4" />
+          <span>{period?.name || "Đợt đánh giá công tác Đoàn"}</span>
+          <Badge className="bg-emerald-600 text-white text-[11px] ml-1">Đang mở nộp bài</Badge>
+        </div>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+          Bộ tiêu chí đánh giá
+        </h1>
+        <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+          <Building className="h-4 w-4" />
+          Đơn vị: <b className="text-slate-800">{profile?.display_name || "Đoàn cơ sở"}</b>
+        </p>
       </div>
-      <Card>
-        <CardContent className="flex flex-col items-center justify-center py-16">
-          <div className="h-16 w-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
-            <ClipboardList className="h-8 w-8 text-slate-300" />
+
+      {/* KPI & Progress Top Cards */}
+      <Card className="border-slate-200 shadow-2xs">
+        <CardContent className="p-5 space-y-4">
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-semibold text-slate-800">
+              Tiến độ hoàn thành minh chứng & nộp bài
+            </span>
+            <span className="font-bold text-blue-700 text-base">{progressPercent}%</span>
           </div>
-          <h3 className="text-lg font-semibold text-slate-700 mb-1">Tiêu chí đánh giá</h3>
-          <p className="text-sm text-muted-foreground text-center max-w-md">Tính năng đang được phát triển. Vui lòng quay lại sau.</p>
+          <Progress value={progressPercent} className="h-2.5" />
+
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2 text-xs">
+            <div className="p-2.5 rounded-md bg-slate-50 border border-slate-100">
+              <span className="text-muted-foreground block">Tổng tiêu chí</span>
+              <span className="text-lg font-bold text-slate-900">{totalCriteria}</span>
+            </div>
+            <div className="p-2.5 rounded-md bg-blue-50 border border-blue-100">
+              <span className="text-blue-700 block">Đã nộp</span>
+              <span className="text-lg font-bold text-blue-800">{submittedCount}</span>
+            </div>
+            <div className="p-2.5 rounded-md bg-emerald-50 border border-emerald-100">
+              <span className="text-emerald-700 block">Đã xác thực</span>
+              <span className="text-lg font-bold text-emerald-800">{verifiedCount}</span>
+            </div>
+            <div className="p-2.5 rounded-md bg-amber-50 border border-amber-100">
+              <span className="text-amber-700 block">Cần bổ sung</span>
+              <span className="text-lg font-bold text-amber-800">{revisionCount}</span>
+            </div>
+            <div className="p-2.5 rounded-md bg-slate-100 border border-slate-200 col-span-2 sm:col-span-1">
+              <span className="text-slate-600 block">Chưa nộp</span>
+              <span className="text-lg font-bold text-slate-700">{remainingCount}</span>
+            </div>
+          </div>
         </CardContent>
       </Card>
+
+      {/* Search & Filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Tìm theo mã hoặc nội dung..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Select value={filterCategory} onValueChange={setFilterCategory}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Nhóm tiêu chí" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tất cả nhóm</SelectItem>
+            {categories.map((c) => (
+              <SelectItem key={c} value={c}>
+                {c}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <SelectTrigger className="w-[170px]">
+            <SelectValue placeholder="Trạng thái" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tất cả trạng thái</SelectItem>
+            <SelectItem value="draft">Chưa nộp</SelectItem>
+            <SelectItem value="submitted">Đã nộp</SelectItem>
+            <SelectItem value="revision_requested">Cần bổ sung</SelectItem>
+            <SelectItem value="verified">Đã xác thực</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Criteria Accordion List */}
+      <div className="space-y-3">
+        {periodLoading || criteriaLoading || subLoading ? (
+          <div className="p-12 text-center text-sm text-muted-foreground space-y-2">
+            <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-600" />
+            <p>Đang tải danh sách tiêu chí đánh giá...</p>
+          </div>
+        ) : filteredItems.length === 0 ? (
+          <div className="p-16 text-center text-sm text-muted-foreground bg-white rounded-lg border">
+            <Layers className="h-10 w-10 text-slate-200 mx-auto mb-3" />
+            Không có tiêu chí nào phù hợp với bộ lọc.
+          </div>
+        ) : (
+          filteredItems.map((item) => (
+            <UnifiedCriteriaAccordion
+              key={item.criterion.id}
+              item={item}
+              mode="user"
+              onSaveDraft={handleSaveDraft}
+              onSubmit={handleSubmitCriterion}
+            />
+          ))
+        )}
+      </div>
+
+      {/* ============================================================ */}
+      {/* 8.6 & 9 STICKY BOTTOM ACTION BAR */}
+      {/* ============================================================ */}
+      <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur border-t border-slate-200 px-4 md:px-8 py-3 shadow-lg">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-3 text-xs sm:text-sm">
+            <span className="font-semibold text-slate-800">
+              Đã nộp: {submittedCount}/{totalCriteria} ({progressPercent}%)
+            </span>
+            <span className="text-muted-foreground hidden sm:inline">•</span>
+            <span className="text-muted-foreground hidden sm:inline">
+              Còn lại {remainingCount} tiêu chí cần hoàn thiện
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 sm:flex-initial gap-1.5"
+              onClick={() => toast.success("Đã lưu nháp toàn bộ thông tin!")}
+            >
+              <Save className="h-4 w-4" />
+              Lưu tất cả bản nháp
+            </Button>
+            <Button
+              size="sm"
+              className="flex-1 sm:flex-initial bg-blue-600 hover:bg-blue-700 text-white gap-1.5"
+              onClick={handleSubmitAll}
+            >
+              <Send className="h-4 w-4" />
+              Nộp tất cả tiêu chí hợp lệ
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
