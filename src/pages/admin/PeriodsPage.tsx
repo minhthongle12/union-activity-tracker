@@ -62,6 +62,8 @@ import {
   ChevronDown,
   ChevronRight,
   Layers,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -150,6 +152,7 @@ export default function PeriodsPage() {
     start_at: "",
     submission_deadline: "",
     review_deadline: "",
+    status: "active" as PeriodStatus,
     autoPopulateCriteria: true,
     autoAssignAllOrgs: true,
     autoActivate: true,
@@ -316,7 +319,10 @@ export default function PeriodsPage() {
       if (editingPeriod) {
         const { error } = await supabase
           .from("evaluation_periods")
-          .update(payload)
+          .update({
+            ...payload,
+            status: values.status || editingPeriod.status,
+          })
           .eq("id", editingPeriod.id);
         if (error) throw error;
       } else {
@@ -480,6 +486,20 @@ export default function PeriodsPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  // Delete an evaluation period
+  const deletePeriodMutation = useMutation({
+    mutationFn: async (periodId: string) => {
+      const { error } = await supabase.from("evaluation_periods").delete().eq("id", periodId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["evaluation_periods"] });
+      queryClient.invalidateQueries({ queryKey: ["admin_periods_stats_counts"] });
+      toast.success("Đã xóa đợt đánh giá thành công");
+    },
+    onError: (err: Error) => toast.error("Không thể xóa đợt đánh giá: " + err.message),
+  });
+
   // Save criteria snapshot to period
   const saveCriteriaSnapshotMutation = useMutation({
     mutationFn: async () => {
@@ -562,6 +582,7 @@ export default function PeriodsPage() {
       start_at: new Date().toISOString().slice(0, 10),
       submission_deadline: "",
       review_deadline: "",
+      status: "active",
       autoPopulateCriteria: true,
       autoAssignAllOrgs: true,
       autoActivate: true,
@@ -590,6 +611,7 @@ export default function PeriodsPage() {
       start_at: period.start_at ? period.start_at.slice(0, 10) : "",
       submission_deadline: period.submission_deadline ? period.submission_deadline.slice(0, 10) : "",
       review_deadline: period.review_deadline ? period.review_deadline.slice(0, 10) : "",
+      status: period.status,
       autoPopulateCriteria: false,
       autoAssignAllOrgs: false,
       autoActivate: false,
@@ -733,6 +755,16 @@ export default function PeriodsPage() {
                     <Button
                       variant="outline"
                       size="sm"
+                      onClick={() => openEdit(period)}
+                      className="gap-1.5 font-bold text-slate-800 border-slate-300 hover:bg-slate-100"
+                    >
+                      <Pencil className="h-3.5 w-3.5 text-slate-600" />
+                      Sửa đợt
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => openConfig(period)}
                       className="gap-1.5"
                     >
@@ -741,30 +773,21 @@ export default function PeriodsPage() {
                     </Button>
 
                     {period.status === "draft" && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEdit(period)}
-                        >
-                          Sửa
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
-                          onClick={() => changeStatusMutation.mutate({ periodId: period.id, status: "active" })}
-                        >
-                          <Play className="h-3.5 w-3.5" />
-                          Mở đợt
-                        </Button>
-                      </>
+                      <Button
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1 font-bold"
+                        onClick={() => changeStatusMutation.mutate({ periodId: period.id, status: "active" })}
+                      >
+                        <Play className="h-3.5 w-3.5" />
+                        Mở đợt
+                      </Button>
                     )}
 
                     {period.status === "active" && (
                       <Button
                         variant="outline"
                         size="sm"
-                        className="text-amber-700 border-amber-300 hover:bg-amber-50 gap-1"
+                        className="text-amber-700 border-amber-300 hover:bg-amber-50 gap-1 font-semibold"
                         onClick={() => {
                           if (confirm("Bạn có chắc muốn đóng nhận nộp minh chứng cho đợt này?")) {
                             changeStatusMutation.mutate({ periodId: period.id, status: "closed" });
@@ -777,20 +800,65 @@ export default function PeriodsPage() {
                     )}
 
                     {period.status === "closed" && (
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-emerald-700 border-emerald-300 hover:bg-emerald-50 gap-1 font-semibold"
+                          onClick={() => {
+                            if (confirm("Mở lại đợt đánh giá để Liên đội tiếp tục nộp minh chứng?")) {
+                              changeStatusMutation.mutate({ periodId: period.id, status: "active" });
+                            }
+                          }}
+                        >
+                          <Play className="h-3.5 w-3.5" />
+                          Mở lại đợt
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-slate-600 hover:bg-slate-100 gap-1"
+                          onClick={() => {
+                            if (confirm("Lưu trữ đợt đánh giá này vào lịch sử?")) {
+                              changeStatusMutation.mutate({ periodId: period.id, status: "archived" });
+                            }
+                          }}
+                        >
+                          <Archive className="h-3.5 w-3.5" />
+                          Lưu trữ
+                        </Button>
+                      </div>
+                    )}
+
+                    {period.status === "archived" && (
                       <Button
                         variant="outline"
                         size="sm"
-                        className="text-slate-600 hover:bg-slate-100 gap-1"
+                        className="text-slate-700 hover:bg-slate-100 gap-1"
                         onClick={() => {
-                          if (confirm("Lưu trữ đợt đánh giá này vào lịch sử?")) {
-                            changeStatusMutation.mutate({ periodId: period.id, status: "archived" });
+                          if (confirm("Khôi phục đợt đánh giá từ lưu trữ?")) {
+                            changeStatusMutation.mutate({ periodId: period.id, status: "closed" });
                           }
                         }}
                       >
-                        <Archive className="h-3.5 w-3.5" />
-                        Lưu trữ
+                        <Play className="h-3.5 w-3.5" />
+                        Khôi phục
                       </Button>
                     )}
+
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-500 hover:text-red-700 hover:bg-red-50 gap-1 h-8 px-2"
+                      title="Xóa đợt đánh giá"
+                      onClick={() => {
+                        if (confirm(`Bạn có chắc muốn xóa đợt đánh giá "${period.name}"? Thao tác này sẽ xóa toàn bộ dữ liệu cấu hình của đợt này.`)) {
+                          deletePeriodMutation.mutate(period.id);
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -879,6 +947,40 @@ export default function PeriodsPage() {
                 />
               </div>
             </div>
+
+            {/* Status selection for Editing Period */}
+            {editingPeriod && (
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-4 space-y-2">
+                <Label htmlFor="p-status" className="text-xs font-semibold text-slate-800">
+                  Trạng thái đợt đánh giá
+                </Label>
+                <Select
+                  value={periodForm.status}
+                  onValueChange={(val) => setPeriodForm({ ...periodForm, status: val as PeriodStatus })}
+                >
+                  <SelectTrigger id="p-status" className="h-9 text-xs bg-white font-medium">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="draft" className="text-xs font-medium">
+                      Bản nháp (draft) — Đang thiết lập, chưa công bố
+                    </SelectItem>
+                    <SelectItem value="active" className="text-xs font-medium text-emerald-800 font-bold">
+                      Đang diễn ra (active) — Liên đội nộp minh chứng
+                    </SelectItem>
+                    <SelectItem value="closed" className="text-xs font-medium text-amber-700 font-bold">
+                      Đã đóng nhận nộp (closed) — Chỉ thẩm định chấm điểm
+                    </SelectItem>
+                    <SelectItem value="archived" className="text-xs font-medium text-slate-500">
+                      Đã lưu trữ (archived) — Khóa toàn bộ
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-slate-500">
+                  Bạn có thể linh hoạt chuyển đổi giữa Đang diễn ra, Đã đóng hoặc Bản nháp bất cứ lúc nào.
+                </p>
+              </div>
+            )}
 
             {/* Multiple Choices Selection for New Period */}
             {!editingPeriod && (
