@@ -47,10 +47,13 @@ import {
   ChevronUp,
   ArrowLeft,
   ArrowRight,
+  Download,
+  FileSpreadsheet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getEvidenceSignedUrl } from "@/lib/storage";
+import { exportReviewExcel } from "@/lib/exportReviewExcel";
 
 // ============================================================
 // Types
@@ -266,6 +269,40 @@ export default function ReviewPage() {
   const [selectedOrgId, setSelectedOrgId] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportExcel = async () => {
+    if (!currentPeriod) return;
+    setIsExporting(true);
+    try {
+      await exportReviewExcel({
+        period: currentPeriod,
+        targetOrgId: selectedOrgId,
+        onProgress: (msg) => toast.loading(msg, { id: "excel-export" }),
+      });
+      toast.success("Xuất file Excel thẩm định thành công!", { id: "excel-export" });
+    } catch (err: any) {
+      toast.error("Lỗi khi xuất Excel: " + err.message, { id: "excel-export" });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportPeriodDirect = async (periodToExport: EvaluationPeriod) => {
+    setIsExporting(true);
+    try {
+      await exportReviewExcel({
+        period: periodToExport,
+        targetOrgId: "all",
+        onProgress: (msg) => toast.loading(msg, { id: "excel-export" }),
+      });
+      toast.success(`Xuất file Excel cho đợt "${periodToExport.name}" thành công!`, { id: "excel-export" });
+    } catch (err: any) {
+      toast.error("Lỗi khi xuất Excel: " + err.message, { id: "excel-export" });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // Queries
   const { data: periods, isLoading: periodsLoading } = useQuery({
@@ -723,8 +760,8 @@ export default function ReviewPage() {
                         </div>
                       </div>
 
-                      {/* Right: Metrics */}
-                      <div className="flex items-center shrink-0 self-start lg:self-center">
+                      {/* Right: Metrics & Action */}
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 shrink-0 self-start lg:self-center">
                         <div className="grid grid-cols-3 gap-2 text-center text-xs w-full sm:w-auto">
                           <div className="bg-orange-50/90 border border-orange-200/90 rounded-lg px-2.5 py-1.5 min-w-[85px]">
                             <span className="text-[10px] text-orange-700 uppercase font-semibold block whitespace-nowrap">Chờ thẩm định</span>
@@ -739,6 +776,21 @@ export default function ReviewPage() {
                             <span className="text-sm sm:text-base font-bold text-red-900">{pStats.revision_requested}</span>
                           </div>
                         </div>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleExportPeriodDirect(p);
+                          }}
+                          disabled={isExporting}
+                          className="h-9 w-full sm:w-auto text-xs font-bold text-emerald-800 border-emerald-300 hover:bg-emerald-50 rounded-xl gap-1.5 shrink-0"
+                          title="Xuất bảng điểm thẩm định của toàn bộ các trường theo mẫu Excel chính thức"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          <span>Xuất Excel</span>
+                        </Button>
                       </div>
                     </div>
                   );
@@ -776,24 +828,48 @@ export default function ReviewPage() {
           </p>
         </div>
 
-        {/* Quick Period Switcher */}
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-xs text-slate-500 font-medium whitespace-nowrap">Đổi đợt:</span>
-          <Select
-            value={currentPeriod.id}
-            onValueChange={(val) => setSearchParams({ period: val })}
+        {/* Quick Period Switcher & Export */}
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          <Button
+            onClick={handleExportExcel}
+            disabled={isExporting}
+            className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs h-9 rounded-xl gap-2 shadow-sm"
           >
-            <SelectTrigger className="w-[220px] text-xs">
-              <SelectValue placeholder="Chọn đợt khác" />
-            </SelectTrigger>
-            <SelectContent>
-              {(periods ?? []).map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            {isExporting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Đang xuất file...</span>
+              </>
+            ) : (
+              <>
+                <FileSpreadsheet className="h-4 w-4" />
+                <span>
+                  {selectedOrgId !== "all"
+                    ? `Xuất Excel (${organizations?.find((o) => o.id === selectedOrgId)?.name?.replace(/^Liên\s+độ?i\s+(Trường\s+)?/i, "") || "Liên đội"})`
+                    : "Xuất toàn bộ Liên đội (Excel)"}
+                </span>
+              </>
+            )}
+          </Button>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-500 font-medium whitespace-nowrap">Đổi đợt:</span>
+            <Select
+              value={currentPeriod.id}
+              onValueChange={(val) => setSearchParams({ period: val })}
+            >
+              <SelectTrigger className="w-[180px] sm:w-[220px] text-xs font-semibold">
+                <SelectValue placeholder="Chọn đợt khác" />
+              </SelectTrigger>
+              <SelectContent>
+                {(periods ?? []).map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
