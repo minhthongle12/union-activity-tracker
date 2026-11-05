@@ -42,6 +42,7 @@ import {
   uploadEvidenceFile,
   getEvidenceSignedUrl,
 } from "@/lib/storage";
+import { useGlobalLoading } from "@/contexts/LoadingContext";
 
 export interface CriterionWithSubmission {
   criterion: PeriodCriterion;
@@ -77,6 +78,7 @@ export function UnifiedCriteriaAccordion({
   const [selfScore, setSelfScore] = useState<number>(
     currentRevision?.self_score ?? criterion.max_score_snapshot ?? 0
   );
+  const { withLoading } = useGlobalLoading();
 
   // Local evidence list
   const [localEvidence, setLocalEvidence] = useState<EvidenceItem[]>(evidenceItems);
@@ -164,15 +166,17 @@ export function UnifiedCriteriaAccordion({
 
     let storagePath: string | null = null;
     try {
-      const res = await uploadEvidenceFile({
-        bucket: "evidence",
-        orgId: "org",
-        periodId: criterion.period_id,
-        entityId: submission?.id || criterion.id,
-        revisionId: currentRevision?.id,
-        file,
-      });
-      storagePath = res.path;
+      await withLoading(async () => {
+        const res = await uploadEvidenceFile({
+          bucket: "evidence",
+          orgId: "org",
+          periodId: criterion.period_id,
+          entityId: submission?.id || criterion.id,
+          revisionId: currentRevision?.id,
+          file,
+        });
+        storagePath = res.path;
+      }, `Đang tải tệp "${file.name}" lên máy chủ...`);
     } catch {
       storagePath = `evidence/${criterion.id}/${file.name}`;
     }

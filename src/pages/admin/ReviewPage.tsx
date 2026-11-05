@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
+import { useGlobalLoading } from "@/contexts/LoadingContext";
 import type {
   EvaluationPeriod,
   Organization,
@@ -251,6 +252,7 @@ async function fetchReviewQueue(periodId?: string, orgId?: string) {
 export default function ReviewPage() {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
+  const { withLoading } = useGlobalLoading();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const periodParam = searchParams.get("period");
@@ -373,86 +375,88 @@ export default function ReviewPage() {
     comment: string,
     orgId: string
   ) => {
-    let subId = existingSubId;
+    await withLoading(async () => {
+      let subId = existingSubId;
 
-    if (!subId) {
-      // Create verified submission if not existing
-      const { data: newSub, error } = await supabase
-        .from("submissions")
-        .insert({
-          organization_period_id: orgPeriodId,
-          period_criteria_id: criterion.id,
-          status: "verified",
-          admin_score: officialScore,
-          verified_by: profile?.id || null,
-          verified_at: new Date().toISOString(),
-        })
+      if (!subId) {
+        // Create verified submission if not existing
+        const { data: newSub, error } = await supabase
+          .from("submissions")
+          .insert({
+            organization_period_id: orgPeriodId,
+            period_criteria_id: criterion.id,
+            status: "verified",
+            admin_score: officialScore,
+            verified_by: profile?.id || null,
+            verified_at: new Date().toISOString(),
+          })
+          .select("id")
+          .single();
+
+        if (error) {
+          toast.error("Lỗi khi xác thực: " + error.message);
+          return;
+        }
+        subId = newSub.id;
+      } else {
+        // Update existing submission
+        const { error } = await supabase
+          .from("submissions")
+          .update({
+            status: "verified",
+            admin_score: officialScore,
+            verified_by: profile?.id || null,
+            verified_at: new Date().toISOString(),
+          })
+          .eq("id", subId);
+
+        if (error) {
+          toast.error("Lỗi khi xác thực: " + error.message);
+          return;
+        }
+      }
+
+      // Insert review action log
+      await supabase.from("review_actions").insert({
+        submission_id: subId,
+        revision_id: currentRevId || null,
+        admin_id: profile?.id || "00000000-0000-0000-0000-000000000000",
+        action: "verified",
+        self_score_snapshot: officialScore,
+        admin_score: officialScore,
+        comment: comment || "Đã thẩm định đạt yêu cầu",
+      });
+
+      // Insert audit log
+      await supabase.from("audit_logs").insert({
+        actor_id: profile?.id || null,
+        action: "VERIFY_CRITERION",
+        entity_type: "submission",
+        entity_id: subId,
+        new_values: { admin_score: officialScore, comment },
+      });
+
+      // Notify organization users
+      const { data: orgUsers } = await supabase
+        .from("profiles")
         .select("id")
-        .single();
+        .eq("organization_id", orgId);
 
-      if (error) {
-        toast.error("Lỗi khi xác thực: " + error.message);
-        return;
+      if (orgUsers && orgUsers.length > 0) {
+        await supabase.from("notifications").insert(
+          orgUsers.map((u) => ({
+            recipient_id: u.id,
+            title: `Tiêu chí ${criterion.code_snapshot} đã được xác thực`,
+            message: `Hội đồng đã thẩm định tiêu chí "${criterion.title_snapshot}". Điểm chính thức: ${officialScore}đ.`,
+            type: "verified",
+            link_url: "/user/results",
+          }))
+        );
       }
-      subId = newSub.id;
-    } else {
-      // Update existing submission
-      const { error } = await supabase
-        .from("submissions")
-        .update({
-          status: "verified",
-          admin_score: officialScore,
-          verified_by: profile?.id || null,
-          verified_at: new Date().toISOString(),
-        })
-        .eq("id", subId);
 
-      if (error) {
-        toast.error("Lỗi khi xác thực: " + error.message);
-        return;
-      }
-    }
-
-    // Insert review action log
-    await supabase.from("review_actions").insert({
-      submission_id: subId,
-      revision_id: currentRevId || null,
-      admin_id: profile?.id || "00000000-0000-0000-0000-000000000000",
-      action: "verified",
-      self_score_snapshot: officialScore,
-      admin_score: officialScore,
-      comment: comment || "Đã thẩm định đạt yêu cầu",
-    });
-
-    // Insert audit log
-    await supabase.from("audit_logs").insert({
-      actor_id: profile?.id || null,
-      action: "VERIFY_CRITERION",
-      entity_type: "submission",
-      entity_id: subId,
-      new_values: { admin_score: officialScore, comment },
-    });
-
-    // Notify organization users
-    const { data: orgUsers } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("organization_id", orgId);
-
-    if (orgUsers && orgUsers.length > 0) {
-      await supabase.from("notifications").insert(
-        orgUsers.map((u) => ({
-          recipient_id: u.id,
-          title: `Tiêu chí ${criterion.code_snapshot} đã được xác thực`,
-          message: `Hội đồng đã thẩm định tiêu chí "${criterion.title_snapshot}". Điểm chính thức: ${officialScore}đ.`,
-          type: "verified",
-          link_url: "/user/results",
-        }))
-      );
-    }
-
-    toast.success(`Đã xác thực và cho điểm cuối cùng (${officialScore}đ) thành công!`);
-    refetch();
+      toast.success(`Đã xác thực và cho điểm cuối cùng (${officialScore}đ) thành công!`);
+      refetch();
+    }, `Đang lưu điểm thẩm định tiêu chí ${criterion.code_snapshot}...`);
   };
 
   // Admin Action: Request Revision
@@ -468,53 +472,55 @@ export default function ReviewPage() {
       return;
     }
 
-    const { error } = await supabase
-      .from("submissions")
-      .update({ status: "revision_requested" })
-      .eq("id", submissionId);
+    await withLoading(async () => {
+      const { error } = await supabase
+        .from("submissions")
+        .update({ status: "revision_requested" })
+        .eq("id", submissionId);
 
-    if (error) {
-      toast.error("Lỗi: " + error.message);
-      return;
-    }
+      if (error) {
+        toast.error("Lỗi: " + error.message);
+        return;
+      }
 
-    await supabase.from("review_actions").insert({
-      submission_id: submissionId,
-      revision_id: currentRevId || null,
-      admin_id: profile?.id || "00000000-0000-0000-0000-000000000000",
-      action: "revision_requested",
-      self_score_snapshot: null,
-      admin_score: null,
-      comment,
-    });
+      await supabase.from("review_actions").insert({
+        submission_id: submissionId,
+        revision_id: currentRevId || null,
+        admin_id: profile?.id || "00000000-0000-0000-0000-000000000000",
+        action: "revision_requested",
+        self_score_snapshot: null,
+        admin_score: null,
+        comment,
+      });
 
-    await supabase.from("audit_logs").insert({
-      actor_id: profile?.id || null,
-      action: "REQUEST_REVISION",
-      entity_type: "submission",
-      entity_id: submissionId,
-      new_values: { comment },
-    });
+      await supabase.from("audit_logs").insert({
+        actor_id: profile?.id || null,
+        action: "REQUEST_REVISION",
+        entity_type: "submission",
+        entity_id: submissionId,
+        new_values: { comment },
+      });
 
-    const { data: orgUsers } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("organization_id", orgId);
+      const { data: orgUsers } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("organization_id", orgId);
 
-    if (orgUsers && orgUsers.length > 0) {
-      await supabase.from("notifications").insert(
-        orgUsers.map((u) => ({
-          recipient_id: u.id,
-          title: `Yêu cầu bổ sung minh chứng tiêu chí ${criterion.code_snapshot}`,
-          message: `Ý kiến Hội đồng: ${comment}`,
-          type: "revision_requested",
-          link_url: "/user/criteria",
-        }))
-      );
-    }
+      if (orgUsers && orgUsers.length > 0) {
+        await supabase.from("notifications").insert(
+          orgUsers.map((u) => ({
+            recipient_id: u.id,
+            title: `Yêu cầu bổ sung minh chứng tiêu chí ${criterion.code_snapshot}`,
+            message: `Ý kiến Hội đồng: ${comment}`,
+            type: "revision_requested",
+            link_url: "/user/criteria",
+          }))
+        );
+      }
 
-    toast.warning("Đã gửi yêu cầu bổ sung minh chứng cho đơn vị!");
-    refetch();
+      toast.warning("Đã gửi yêu cầu bổ sung minh chứng cho đơn vị!");
+      refetch();
+    }, "Đang gửi yêu cầu bổ sung minh chứng...");
   };
 
   // Admin Action: Reopen
@@ -529,38 +535,40 @@ export default function ReviewPage() {
       return;
     }
 
-    const { error } = await supabase
-      .from("submissions")
-      .update({
-        status: "submitted",
-        verified_at: null,
-        verified_by: null,
-      })
-      .eq("id", submissionId);
+    await withLoading(async () => {
+      const { error } = await supabase
+        .from("submissions")
+        .update({
+          status: "submitted",
+          verified_at: null,
+          verified_by: null,
+        })
+        .eq("id", submissionId);
 
-    if (error) {
-      toast.error("Lỗi: " + error.message);
-      return;
-    }
+      if (error) {
+        toast.error("Lỗi: " + error.message);
+        return;
+      }
 
-    await supabase.from("review_actions").insert({
-      submission_id: submissionId,
-      revision_id: currentRevId || null,
-      admin_id: profile?.id || "00000000-0000-0000-0000-000000000000",
-      action: "reopened",
-      comment: reason,
-    });
+      await supabase.from("review_actions").insert({
+        submission_id: submissionId,
+        revision_id: currentRevId || null,
+        admin_id: profile?.id || "00000000-0000-0000-0000-000000000000",
+        action: "reopened",
+        comment: reason,
+      });
 
-    await supabase.from("audit_logs").insert({
-      actor_id: profile?.id || null,
-      action: "REOPEN_VERIFIED_SUBMISSION",
-      entity_type: "submission",
-      entity_id: submissionId,
-      new_values: { reason },
-    });
+      await supabase.from("audit_logs").insert({
+        actor_id: profile?.id || null,
+        action: "REOPEN_VERIFIED_SUBMISSION",
+        entity_type: "submission",
+        entity_id: submissionId,
+        new_values: { reason },
+      });
 
-    toast.info("Đã mở lại thẩm định bài nộp.");
-    refetch();
+      toast.info("Đã mở lại thẩm định bài nộp.");
+      refetch();
+    }, "Đang mở lại hồ sơ thẩm định...");
   };
 
   // Filter for View 1 (Periods Overview)
@@ -735,21 +743,7 @@ export default function ReviewPage() {
                       </div>
                     </div>
 
-                    {/* Action Button */}
-                    <div className="pt-2">
-                      <Button
-                        size="sm"
-                        className="w-full bg-blue-600 group-hover:bg-blue-700 text-white gap-2 shadow-2xs font-medium"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSearchParams({ period: p.id });
-                        }}
-                      >
-                        <CheckSquare className="h-4 w-4" />
-                        Vào thẩm định đợt này
-                        <ArrowRight className="h-3.5 w-3.5 ml-auto group-hover:translate-x-1 transition-transform" />
-                      </Button>
-                    </div>
+                
                   </CardContent>
                 </Card>
               );

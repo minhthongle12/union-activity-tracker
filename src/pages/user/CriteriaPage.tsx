@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
+import { useGlobalLoading } from "@/contexts/LoadingContext";
 import type {
   EvaluationPeriod,
   PeriodCriterion,
@@ -146,6 +147,7 @@ function formatDateDisplay(isoStr: string | null | undefined): string {
 export default function UserCriteriaPage() {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
+  const { withLoading } = useGlobalLoading();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const periodParam = searchParams.get("period");
@@ -426,10 +428,12 @@ export default function UserCriteriaPage() {
   // User Action: Save Draft
   const handleSaveDraft = async (criterionId: string, selfScore: number, evidence: EvidenceItem[]) => {
     try {
-      await persistSubmission(criterionId, selfScore, evidence, "draft");
+      await withLoading(async () => {
+        await persistSubmission(criterionId, selfScore, evidence, "draft");
+        await refetchSubmissions();
+        await queryClient.invalidateQueries({ queryKey: ["user_submissions"] });
+      }, "Đang lưu nháp tiêu chí...");
       toast.success("Đã lưu bản nháp tiêu chí thành công!");
-      await refetchSubmissions();
-      await queryClient.invalidateQueries({ queryKey: ["user_submissions"] });
     } catch (err: any) {
       toast.error("Lỗi khi lưu nháp: " + err.message);
     }
@@ -439,14 +443,17 @@ export default function UserCriteriaPage() {
   const handleSubmitCriterion = async (criterionId: string, selfScore: number, evidence: EvidenceItem[]) => {
     try {
       const isAlreadySubmitted = criteriaItems.find((i) => i.criterion.id === criterionId)?.submission?.status === "submitted";
-      await persistSubmission(criterionId, selfScore, evidence, "submitted");
+      await withLoading(async () => {
+        await persistSubmission(criterionId, selfScore, evidence, "submitted");
+        await refetchSubmissions();
+        await queryClient.invalidateQueries({ queryKey: ["user_submissions"] });
+      }, isAlreadySubmitted ? "Đang cập nhật minh chứng..." : "Đang nộp tiêu chí...");
+
       if (isAlreadySubmitted) {
         toast.success("Đã cập nhật minh chứng thành công! Hồ sơ đang ở trạng thái Chờ xác thực.");
       } else {
         toast.success("Nộp tiêu chí thành công! Trạng thái: Đã nộp, Chờ xác thực.");
       }
-      await refetchSubmissions();
-      await queryClient.invalidateQueries({ queryKey: ["user_submissions"] });
     } catch (err: any) {
       toast.error("Lỗi khi nộp tiêu chí: " + err.message);
     }
@@ -469,29 +476,30 @@ export default function UserCriteriaPage() {
       return;
     }
 
-    const toastId = toast.loading("Đang nộp hồ sơ đánh giá...");
     try {
-      for (const item of eligible) {
-        const score = item.currentRevision?.self_score ?? item.criterion.max_score_snapshot ?? 0;
-        const ev = item.evidenceItems ?? [];
-        await persistSubmission(item.criterion.id, score, ev, "submitted");
-      }
+      await withLoading(async () => {
+        for (const item of eligible) {
+          const score = item.currentRevision?.self_score ?? item.criterion.max_score_snapshot ?? 0;
+          const ev = item.evidenceItems ?? [];
+          await persistSubmission(item.criterion.id, score, ev, "submitted");
+        }
 
-      if (subData?.orgPeriodId) {
-        await supabase
-          .from("organization_periods")
-          .update({ status: "submitted" })
-          .eq("id", subData.orgPeriodId);
-      }
+        if (subData?.orgPeriodId) {
+          await supabase
+            .from("organization_periods")
+            .update({ status: "submitted" })
+            .eq("id", subData.orgPeriodId);
+        }
+
+        await refetchSubmissions();
+        await queryClient.invalidateQueries({ queryKey: ["user_submissions"] });
+      }, `Đang nộp hồ sơ ${eligible.length} tiêu chí...`);
 
       toast.success(
-        `Đã nộp thành công ${eligible.length} tiêu chí! Hồ sơ đang chờ Ban Thường vụ thẩm định.`,
-        { id: toastId }
+        `Đã nộp thành công ${eligible.length} tiêu chí! Hồ sơ đang chờ Ban Thường vụ thẩm định.`
       );
-      await refetchSubmissions();
-      await queryClient.invalidateQueries({ queryKey: ["user_submissions"] });
     } catch (err: any) {
-      toast.error("Lỗi khi nộp hồ sơ: " + err.message, { id: toastId });
+      toast.error("Lỗi khi nộp hồ sơ: " + err.message);
     }
   };
 
@@ -641,7 +649,7 @@ export default function UserCriteriaPage() {
                         : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200"
                     )}
                   >
-                    {isActive ? "Vào tự chấm & nộp minh chứng" : "Xem bộ tiêu chí & hồ sơ"}
+                    Chi tiết
                     <ArrowRight className="h-3.5 w-3.5" />
                   </Button>
                 </div>
@@ -869,7 +877,7 @@ export default function UserCriteriaPage() {
               className="bg-[#659777] hover:bg-[#537e62] text-white font-medium px-5 py-2 text-xs sm:text-sm h-9 rounded-md shadow-2xs transition-colors"
               onClick={handleSubmitAll}
             >
-              Nộp bài thi chính thức
+              Nộp toàn bộ
             </Button>
           </div>
         </div>

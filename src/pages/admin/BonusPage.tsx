@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
-import type { BonusRequest, BonusStatus, Organization } from "@/types/database";
+import type { BonusRequest, BonusStatus, Organization, EvaluationPeriod } from "@/types/database";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,12 +33,22 @@ import {
   ExternalLink,
   Loader2,
   Building,
+  Calendar,
 } from "lucide-react";
 import { toast } from "sonner";
 
 interface BonusWithOrg extends BonusRequest {
   organization?: Organization;
+  period?: EvaluationPeriod;
   evidence?: { id: string; file_name: string; external_url: string }[];
+}
+
+async function fetchPeriods(): Promise<EvaluationPeriod[]> {
+  const { data } = await supabase
+    .from("evaluation_periods")
+    .select("*")
+    .order("created_at", { ascending: false });
+  return (data ?? []) as EvaluationPeriod[];
 }
 
 async function fetchAdminBonusRequests(): Promise<BonusWithOrg[]> {
@@ -47,7 +57,8 @@ async function fetchAdminBonusRequests(): Promise<BonusWithOrg[]> {
     .select(`
       *,
       organization_period:organization_periods(
-        organization:organizations(*)
+        organization:organizations(*),
+        period:evaluation_periods(*)
       ),
       evidence:bonus_evidence_items(*)
     `)
@@ -57,7 +68,12 @@ async function fetchAdminBonusRequests(): Promise<BonusWithOrg[]> {
 
   return (bonusData ?? []).map((b: any) => ({
     ...b,
-    organization: b.organization_period?.organization,
+    organization: Array.isArray(b.organization_period?.organization)
+      ? b.organization_period?.organization[0]
+      : b.organization_period?.organization,
+    period: Array.isArray(b.organization_period?.period)
+      ? b.organization_period?.period[0]
+      : b.organization_period?.period,
     evidence: b.evidence ?? [],
   }));
 }
@@ -67,11 +83,17 @@ export default function AdminBonusPage() {
   const { profile } = useAuth();
 
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterPeriod, setFilterPeriod] = useState<string>("all");
   const [selectedReq, setSelectedReq] = useState<BonusWithOrg | null>(null);
   const [actionType, setActionType] = useState<"approve" | "reject" | "revision">("approve");
   const [approvedScore, setApprovedScore] = useState<number>(1.0);
   const [actionComment, setActionComment] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  const { data: periods } = useQuery({
+    queryKey: ["admin_bonus_periods"],
+    queryFn: fetchPeriods,
+  });
 
   const { data: requests, isLoading } = useQuery({
     queryKey: ["admin_bonus_requests"],
@@ -181,7 +203,9 @@ export default function AdminBonusPage() {
   }
 
   const filtered = (requests ?? []).filter((r) => {
-    return filterStatus === "all" || r.status === filterStatus;
+    const matchStatus = filterStatus === "all" || r.status === filterStatus;
+    const matchPeriod = filterPeriod === "all" || r.period?.id === filterPeriod;
+    return matchStatus && matchPeriod;
   });
 
   return (
@@ -197,18 +221,34 @@ export default function AdminBonusPage() {
           </p>
         </div>
 
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Trạng thái" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tất cả trạng thái</SelectItem>
-            <SelectItem value="submitted">Chờ duyệt</SelectItem>
-            <SelectItem value="approved">Đã duyệt</SelectItem>
-            <SelectItem value="rejected">Không duyệt</SelectItem>
-            <SelectItem value="revision_requested">Yêu cầu bổ sung</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={filterPeriod} onValueChange={setFilterPeriod}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Đợt đánh giá" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả đợt đánh giá</SelectItem>
+              {(periods ?? []).map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="w-[170px]">
+              <SelectValue placeholder="Trạng thái" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả trạng thái</SelectItem>
+              <SelectItem value="submitted">Chờ duyệt</SelectItem>
+              <SelectItem value="approved">Đã duyệt</SelectItem>
+              <SelectItem value="rejected">Không duyệt</SelectItem>
+              <SelectItem value="revision_requested">Yêu cầu bổ sung</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* List */}
@@ -235,6 +275,12 @@ export default function AdminBonusPage() {
                         <Building className="h-3 w-3 text-blue-600" />
                         {item.organization?.name || "Đoàn cơ sở"}
                       </Badge>
+                      {item.period?.name && (
+                        <Badge variant="outline" className="text-xs gap-1 bg-blue-50 text-blue-700 border-blue-200">
+                          <Calendar className="h-3 w-3" />
+                          {item.period.name}
+                        </Badge>
+                      )}
                       {item.status === "submitted" && <Badge className="bg-blue-600 text-white">Chờ duyệt</Badge>}
                       {item.status === "approved" && <Badge className="bg-emerald-600 text-white">Đã duyệt (+{item.approved_score}đ)</Badge>}
                       {item.status === "rejected" && <Badge className="bg-red-600 text-white">Từ chối</Badge>}
@@ -309,19 +355,19 @@ export default function AdminBonusPage() {
 
       {/* Review Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
+        <DialogContent className="w-[94vw] max-w-md max-h-[92dvh] flex flex-col p-4 sm:p-6 overflow-hidden rounded-xl">
+          <DialogHeader className="shrink-0 pb-1 text-left">
             <DialogTitle>
               {actionType === "approve" && "Phê duyệt điểm cộng"}
               {actionType === "reject" && "Từ chối đề xuất điểm cộng"}
               {actionType === "revision" && "Yêu cầu bổ sung minh chứng"}
             </DialogTitle>
-            <DialogDescription>
-              Hoạt động: <span className="font-semibold text-slate-800">{selectedReq?.title}</span>
+            <DialogDescription className="text-xs sm:text-sm">
+              Hoạt động: <span className="font-semibold text-slate-800 break-words">{selectedReq?.title}</span>
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 py-2">
+          <div className="flex-1 overflow-y-auto space-y-3 py-2 pr-1 -mr-1">
             {actionType === "approve" && (
               <div>
                 <Label className="text-xs">Điểm phê duyệt (tối đa {selectedReq?.requested_score}đ)</Label>
@@ -332,7 +378,7 @@ export default function AdminBonusPage() {
                   max={selectedReq?.requested_score || 5}
                   value={approvedScore}
                   onChange={(e) => setApprovedScore(parseFloat(e.target.value) || 0)}
-                  className="mt-1 font-bold text-emerald-700 w-32"
+                  className="mt-1 font-bold text-emerald-700 w-full sm:w-32 text-xs sm:text-sm"
                 />
               </div>
             )}
@@ -344,22 +390,28 @@ export default function AdminBonusPage() {
                 rows={3}
                 value={actionComment}
                 onChange={(e) => setActionComment(e.target.value)}
-                className="mt-1"
+                className="mt-1 text-xs sm:text-sm resize-none"
               />
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+          <DialogFooter className="shrink-0 pt-3 border-t border-slate-100 flex flex-col-reverse sm:flex-row gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDialogOpen(false)}
+              className="w-full sm:w-auto text-xs sm:text-sm"
+            >
               Hủy
             </Button>
             <Button
+              type="button"
               className={
                 actionType === "approve"
-                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto text-xs sm:text-sm"
                   : actionType === "reject"
-                  ? "bg-red-600 hover:bg-red-700 text-white"
-                  : "bg-amber-600 hover:bg-amber-700 text-white"
+                  ? "bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto text-xs sm:text-sm"
+                  : "bg-amber-600 hover:bg-amber-700 text-white w-full sm:w-auto text-xs sm:text-sm"
               }
               onClick={() => reviewMutation.mutate()}
               disabled={reviewMutation.isPending}
