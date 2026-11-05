@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import {
   LayoutDashboard,
-  ClipboardList,
+  Calendar,
   FolderOpen,
   Award,
   Trophy,
@@ -34,7 +34,7 @@ import { PWAInstallPrompt } from "@/components/pwa/PWAInstallPrompt";
 
 const navItems = [
   { to: "/user", icon: LayoutDashboard, label: "Tổng quan", end: true },
-  { to: "/user/criteria", icon: ClipboardList, label: "Tiêu chí & Minh chứng" },
+  { to: "/user/criteria", icon: Calendar, label: "Đợt đánh giá" },
   { to: "/user/evidence", icon: FolderOpen, label: "Kho minh chứng" },
   { to: "/user/bonus", icon: Award, label: "Điểm cộng" },
   { to: "/user/results", icon: Trophy, label: "Kết quả đánh giá" },
@@ -262,8 +262,8 @@ export function UserLayout() {
               )
             }
           >
-            <ClipboardList className="h-5 w-5 mb-0.5" />
-            <span>Tiêu chí</span>
+            <Calendar className="h-5 w-5 mb-0.5" />
+            <span>Đợt đánh giá</span>
           </NavLink>
 
           <NavLink

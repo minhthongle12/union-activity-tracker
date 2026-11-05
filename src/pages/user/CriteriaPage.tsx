@@ -275,7 +275,7 @@ export default function UserCriteriaPage() {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            Bộ tiêu chí đánh giá
+            Đợt đánh giá
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Đánh giá công tác Đội và nộp minh chứng
@@ -759,7 +759,7 @@ export default function UserCriteriaPage() {
             )}
           </div>
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-950">
-            Bộ tiêu chí đánh giá
+            Đợt đánh giá: {selectedPeriod.name}
           </h1>
           <p className="text-sm text-slate-700 flex items-center gap-1.5 font-medium">
             <Building className="h-4 w-4 text-emerald-700" />

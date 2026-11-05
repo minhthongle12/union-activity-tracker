@@ -35,7 +35,10 @@ export function Breadcrumbs() {
       {pathnames.map((value, index) => {
         const to = `/${pathnames.slice(0, index + 1).join("/")}`;
         const isLast = index === pathnames.length - 1;
-        const name = routeNames[value] || value;
+        let name = routeNames[value] || value;
+        if (value === "criteria" && pathnames[0] === "user") {
+          name = "Đợt đánh giá";
+        }
 
         return (
           <div key={to} className="flex items-center space-x-1 min-w-0">
