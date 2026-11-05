@@ -120,6 +120,9 @@ export default function PeriodsPage() {
     start_at: "",
     submission_deadline: "",
     review_deadline: "",
+    autoPopulateCriteria: true,
+    autoAssignAllOrgs: true,
+    autoActivate: true,
   });
 
   // Configure Period (Criteria & Orgs) Modal
@@ -172,11 +175,83 @@ export default function PeriodsPage() {
           .eq("id", editingPeriod.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("evaluation_periods").insert({
-          ...payload,
-          status: "draft" as PeriodStatus,
-        });
-        if (error) throw error;
+        const status: PeriodStatus = values.autoActivate ? "active" : "draft";
+        const { data: newPeriod, error: pErr } = await supabase
+          .from("evaluation_periods")
+          .insert({
+            ...payload,
+            status,
+          })
+          .select()
+          .single();
+        if (pErr) throw pErr;
+
+        // Auto snapshot criteria from library if enabled
+        if (values.autoPopulateCriteria && newPeriod) {
+          const { data: libCrit } = await supabase
+            .from("criteria_library")
+            .select("*, category:criteria_categories(*)")
+            .eq("is_active", true);
+
+          if (libCrit && libCrit.length > 0) {
+            const snapshots = libCrit.map((c: any) => ({
+              period_id: newPeriod.id,
+              source_criteria_id: c.id,
+              category_name_snapshot: c.category?.name || "Chung",
+              code_snapshot: c.code,
+              title_snapshot: c.title,
+              description_snapshot: c.description,
+              scoring_snapshot: c.scoring_guidelines,
+              max_score_snapshot: c.max_score,
+              req_doc1: c.req_doc1,
+              req_doc2: c.req_doc2,
+              req_link3: c.req_link3,
+              responsible_unit_snapshot: c.responsible_unit,
+              deadline_snapshot: c.deadline,
+              sort_order: c.sort_order,
+            }));
+            await supabase.from("period_criteria").insert(snapshots);
+          }
+        }
+
+        // Auto assign all active organizations if enabled
+        if (values.autoAssignAllOrgs && newPeriod) {
+          const { data: orgs } = await supabase
+            .from("organizations")
+            .select("id")
+            .eq("is_active", true);
+
+          if (orgs && orgs.length > 0) {
+            const orgRows = orgs.map((o) => ({
+              period_id: newPeriod.id,
+              organization_id: o.id,
+              status: "assigned" as const,
+            }));
+            await supabase.from("organization_periods").insert(orgRows);
+
+            // Send notification to users
+            if (values.autoActivate) {
+              const orgIds = orgs.map((o) => o.id);
+              const { data: users } = await supabase
+                .from("profiles")
+                .select("id")
+                .in("organization_id", orgIds)
+                .eq("role", "user");
+
+              if (users && users.length > 0) {
+                await supabase.from("notifications").insert(
+                  users.map((u) => ({
+                    recipient_id: u.id,
+                    title: "Đợt đánh giá mới đã chính thức mở",
+                    message: `Đợt đánh giá "${newPeriod.name}" đã mở tiếp nhận minh chứng.`,
+                    type: "period_opened",
+                    link_url: "/user/criteria",
+                  }))
+                );
+              }
+            }
+          }
+        }
       }
     },
     onSuccess: () => {
@@ -330,6 +405,9 @@ export default function PeriodsPage() {
       start_at: new Date().toISOString().slice(0, 10),
       submission_deadline: "",
       review_deadline: "",
+      autoPopulateCriteria: true,
+      autoAssignAllOrgs: true,
+      autoActivate: true,
     });
     setPeriodDialogOpen(true);
   }
@@ -342,6 +420,9 @@ export default function PeriodsPage() {
       start_at: period.start_at ? period.start_at.slice(0, 10) : "",
       submission_deadline: period.submission_deadline ? period.submission_deadline.slice(0, 10) : "",
       review_deadline: period.review_deadline ? period.review_deadline.slice(0, 10) : "",
+      autoPopulateCriteria: false,
+      autoAssignAllOrgs: false,
+      autoActivate: false,
     });
     setPeriodDialogOpen(true);
   }
@@ -602,6 +683,44 @@ export default function PeriodsPage() {
                 />
               </div>
             </div>
+
+            {/* Quick Setup for New Period */}
+            {!editingPeriod && (
+              <div className="border rounded-lg p-3 bg-blue-50/60 border-blue-200 space-y-2.5">
+                <span className="text-xs font-semibold text-blue-900 block">
+                  Thiết lập tự động (Khuyến nghị):
+                </span>
+                <label className="flex items-center space-x-2 text-xs text-slate-800 cursor-pointer">
+                  <Checkbox
+                    checked={periodForm.autoPopulateCriteria}
+                    onCheckedChange={(c) =>
+                      setPeriodForm({ ...periodForm, autoPopulateCriteria: !!c })
+                    }
+                  />
+                  <span>Tự động sao chép toàn bộ tiêu chí đang hoạt động vào đợt này</span>
+                </label>
+                <label className="flex items-center space-x-2 text-xs text-slate-800 cursor-pointer">
+                  <Checkbox
+                    checked={periodForm.autoAssignAllOrgs}
+                    onCheckedChange={(c) =>
+                      setPeriodForm({ ...periodForm, autoAssignAllOrgs: !!c })
+                    }
+                  />
+                  <span>Tự động gán tất cả Đoàn cơ sở tham gia đợt đánh giá</span>
+                </label>
+                <label className="flex items-center space-x-2 text-xs text-slate-800 cursor-pointer">
+                  <Checkbox
+                    checked={periodForm.autoActivate}
+                    onCheckedChange={(c) =>
+                      setPeriodForm({ ...periodForm, autoActivate: !!c })
+                    }
+                  />
+                  <span className="font-medium text-emerald-800">
+                    Kích hoạt mở đợt ngay lập tức (các tài khoản cơ sở thấy tiêu chí ngay)
+                  </span>
+                </label>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
