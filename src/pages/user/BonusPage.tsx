@@ -1,7 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
+import { useGlobalLoading } from "@/contexts/LoadingContext";
 import type { BonusRequest, BonusStatus, EvaluationPeriod } from "@/types/database";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,64 +60,123 @@ export interface UserAssignedPeriod {
 
 async function fetchUserAssignedPeriods(orgId?: string | null): Promise<UserAssignedPeriod[]> {
   if (!orgId) return [];
-  const { data, error } = await supabase
-    .from("organization_periods")
-    .select("id, period_id, status, period:evaluation_periods(*)")
-    .eq("organization_id", orgId)
-    .order("created_at", { ascending: false });
 
-  if (error) throw error;
-  return (data ?? [])
-    .map((op: any) => ({
-      id: op.id,
-      period_id: op.period_id,
-      status: op.status,
-      period: Array.isArray(op.period) ? op.period[0] : op.period,
-    }))
-    .filter((op) => !!op.period) as UserAssignedPeriod[];
+  try {
+    // 1. Fetch organization_periods for this organization (ordered by assigned_at, NOT created_at)
+    const { data: opData, error: opError } = await supabase
+      .from("organization_periods")
+      .select("id, period_id, status, assigned_at")
+      .eq("organization_id", orgId)
+      .order("assigned_at", { ascending: false });
+
+    if (opError) {
+      console.error("fetchUserAssignedPeriods opError:", opError);
+      throw opError;
+    }
+
+    // 2. Fetch all non-draft evaluation periods
+    const { data: periodsData, error: periodsError } = await supabase
+      .from("evaluation_periods")
+      .select("*")
+      .neq("status", "draft")
+      .order("created_at", { ascending: false });
+
+    if (periodsError) {
+      console.error("fetchUserAssignedPeriods periodsError:", periodsError);
+      throw periodsError;
+    }
+
+    const allPeriods = (periodsData ?? []) as EvaluationPeriod[];
+    const periodMap = new Map(allPeriods.map((p) => [p.id, p]));
+
+    const result: UserAssignedPeriod[] = [];
+    const processedPeriodIds = new Set<string>();
+
+    // Priority 1: Periods explicitly assigned to this organization
+    for (const op of opData ?? []) {
+      const period = periodMap.get(op.period_id);
+      if (period) {
+        result.push({
+          id: op.id,
+          period_id: op.period_id,
+          status: op.status,
+          period,
+        });
+        processedPeriodIds.add(period.id);
+      }
+    }
+
+    // Priority 2: Any open/active evaluation periods not yet assigned (provisionable on the fly)
+    for (const period of allPeriods) {
+      if (!processedPeriodIds.has(period.id) && period.status === "active") {
+        result.push({
+          id: `period_${period.id}`,
+          period_id: period.id,
+          status: "assigned",
+          period,
+        });
+        processedPeriodIds.add(period.id);
+      }
+    }
+
+    return result;
+  } catch (err) {
+    console.error("fetchUserAssignedPeriods error:", err);
+    return [];
+  }
 }
 
 async function fetchUserBonusRequests(orgId?: string | null): Promise<UserBonusWithPeriod[]> {
   if (!orgId) return [];
-  // Get all bonus requests for this org
-  const { data: orgPeriods } = await supabase
-    .from("organization_periods")
-    .select("id")
-    .eq("organization_id", orgId);
+  try {
+    // Get all bonus requests for this org
+    const { data: orgPeriods } = await supabase
+      .from("organization_periods")
+      .select("id")
+      .eq("organization_id", orgId);
 
-  const orgPeriodIds = (orgPeriods ?? []).map((op) => op.id);
-  if (orgPeriodIds.length === 0) return [];
+    const orgPeriodIds = (orgPeriods ?? []).map((op) => op.id);
+    if (orgPeriodIds.length === 0) return [];
 
-  const { data, error } = await supabase
-    .from("bonus_requests")
-    .select(`
-      *,
-      organization_period:organization_periods(
-        id,
-        period:evaluation_periods(*)
-      ),
-      evidence:bonus_evidence_items(*)
-    `)
-    .in("organization_period_id", orgPeriodIds)
-    .order("created_at", { ascending: false });
+    const { data, error } = await supabase
+      .from("bonus_requests")
+      .select(`
+        *,
+        organization_period:organization_periods(
+          id,
+          period:evaluation_periods(*)
+        ),
+        evidence:bonus_evidence_items(*)
+      `)
+      .in("organization_period_id", orgPeriodIds)
+      .order("created_at", { ascending: false });
 
-  if (error) throw error;
-  return (data ?? []).map((b: any) => ({
-    ...b,
-    organization_period: b.organization_period
-      ? {
-          ...b.organization_period,
-          period: Array.isArray(b.organization_period.period)
-            ? b.organization_period.period[0]
-            : b.organization_period.period,
-        }
-      : undefined,
-  })) as UserBonusWithPeriod[];
+    if (error) {
+      console.error("fetchUserBonusRequests error:", error);
+      throw error;
+    }
+
+    return (data ?? []).map((b: any) => ({
+      ...b,
+      organization_period: b.organization_period
+        ? {
+            ...b.organization_period,
+            period: Array.isArray(b.organization_period.period)
+              ? b.organization_period.period[0]
+              : b.organization_period.period,
+          }
+        : undefined,
+    })) as UserBonusWithPeriod[];
+  } catch (err) {
+    console.error("fetchUserBonusRequests error:", err);
+    return [];
+  }
 }
 
 export default function UserBonusPage() {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
+  const { withLoading } = useGlobalLoading();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [filterPeriod, setFilterPeriod] = useState<string>("all");
 
@@ -140,6 +200,18 @@ export default function UserBonusPage() {
     queryFn: () => fetchUserBonusRequests(profile?.organization_id),
     enabled: !!profile?.organization_id,
   });
+
+  // Auto select default active period when dialog opens or assignedPeriods finish loading
+  useEffect(() => {
+    if (dialogOpen && !form.organization_period_id && assignedPeriods && assignedPeriods.length > 0) {
+      const defaultOp =
+        assignedPeriods.find((op) => op.period?.status === "active") ||
+        assignedPeriods[0];
+      if (defaultOp) {
+        setForm((prev) => ({ ...prev, organization_period_id: defaultOp.id }));
+      }
+    }
+  }, [dialogOpen, assignedPeriods, form.organization_period_id]);
 
   function handleOpenCreateDialog() {
     const defaultOp =
@@ -166,10 +238,42 @@ export default function UserBonusPage() {
         throw new Error("Vui lòng nhập tên hoạt động / công trình thanh niên.");
       }
 
+      let targetOpId = form.organization_period_id;
+
+      // Handle resolving or auto-creating organization_period if needed
+      if (targetOpId.startsWith("period_")) {
+        const periodId = targetOpId.replace("period_", "");
+        if (profile?.organization_id) {
+          const { data: existingOp } = await supabase
+            .from("organization_periods")
+            .select("id")
+            .eq("period_id", periodId)
+            .eq("organization_id", profile.organization_id)
+            .maybeSingle();
+
+          if (existingOp) {
+            targetOpId = existingOp.id;
+          } else {
+            const { data: newOp, error: createOpErr } = await supabase
+              .from("organization_periods")
+              .insert({
+                period_id: periodId,
+                organization_id: profile.organization_id,
+                status: "in_progress",
+              })
+              .select("id")
+              .single();
+
+            if (createOpErr) throw createOpErr;
+            targetOpId = newOp.id;
+          }
+        }
+      }
+
       const { data: newReq, error: reqError } = await supabase
         .from("bonus_requests")
         .insert({
-          organization_period_id: form.organization_period_id,
+          organization_period_id: targetOpId,
           title: form.title.trim(),
           description: form.description.trim() || null,
           requested_score: Number(form.requested_score) || 0,

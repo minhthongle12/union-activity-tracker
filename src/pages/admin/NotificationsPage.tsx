@@ -188,7 +188,7 @@ export default function AdminNotificationsPage() {
             <div>
               <Label className="text-xs">Tiêu đề thông báo *</Label>
               <Input
-                placeholder="VD: Nhắc nhở hạn chót nộp minh chứng đợt 1/2024"
+                placeholder="VD: Nhắc nhở hạn chót nộp minh chứng đợt 1/2026"
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
                 className="mt-1"

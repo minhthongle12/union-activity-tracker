@@ -128,7 +128,7 @@ export default function LoginPage() {
         </Card>
 
         <p className="text-center text-xs text-slate-400 mt-6">
-          © 2024 Hệ thống Quản lý Công tác Đoàn
+          © 2026 Hệ thống Quản lý Công tác Đoàn
         </p>
       </div>
     </div>

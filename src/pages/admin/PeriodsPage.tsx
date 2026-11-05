@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { cn } from "@/lib/utils";
 import type {
   EvaluationPeriod,
   PeriodStatus,
@@ -57,6 +58,9 @@ import {
   Settings2,
   Loader2,
   AlertCircle,
+  ChevronDown,
+  ChevronRight,
+  Layers,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -107,6 +111,25 @@ async function fetchPeriodDetails(periodId: string) {
   };
 }
 
+async function fetchPeriodsStats() {
+  const [critRes, orgRes] = await Promise.all([
+    supabase.from("period_criteria").select("id, period_id"),
+    supabase.from("organization_periods").select("id, period_id"),
+  ]);
+
+  const critCountByPeriod: Record<string, number> = {};
+  (critRes.data ?? []).forEach((c) => {
+    critCountByPeriod[c.period_id] = (critCountByPeriod[c.period_id] || 0) + 1;
+  });
+
+  const orgCountByPeriod: Record<string, number> = {};
+  (orgRes.data ?? []).forEach((op) => {
+    orgCountByPeriod[op.period_id] = (orgCountByPeriod[op.period_id] || 0) + 1;
+  });
+
+  return { critCountByPeriod, orgCountByPeriod };
+}
+
 // ============================================================
 // Main Component
 // ============================================================
@@ -131,6 +154,15 @@ export default function PeriodsPage() {
     autoActivate: true,
   });
 
+  // Create Period Selection States
+  const [createTab, setCreateTab] = useState<"orgs" | "criteria">("orgs");
+  const [createSelectedOrgIds, setCreateSelectedOrgIds] = useState<string[]>([]);
+  const [createSelectedCriteriaIds, setCreateSelectedCriteriaIds] = useState<string[]>([]);
+  const [expandedCategoryIds, setExpandedCategoryIds] = useState<Record<string, boolean>>({});
+  const [orgSearch, setOrgSearch] = useState("");
+  const [critSearch, setCritSearch] = useState("");
+  const [hasInitializedCreate, setHasInitializedCreate] = useState(false);
+
   // Configure Period (Criteria & Orgs) Modal
   const [configPeriod, setConfigPeriod] = useState<EvaluationPeriod | null>(null);
   const [configTab, setConfigTab] = useState<"criteria" | "orgs">("criteria");
@@ -152,6 +184,112 @@ export default function PeriodsPage() {
     queryKey: ["organizations_active_all"],
     queryFn: fetchOrganizations,
   });
+
+  const { data: periodStats } = useQuery({
+    queryKey: ["admin_periods_stats_counts"],
+    queryFn: fetchPeriodsStats,
+  });
+
+  // Criteria grouped by Category
+  const criteriaByCategory = useMemo(() => {
+    if (!libraryCriteria) return [];
+    const map = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        code?: string | null;
+        criteria: CriterionLibrary[];
+      }
+    >();
+
+    for (const c of libraryCriteria as any[]) {
+      const catId = c.category_id || "chung";
+      const catName = c.category?.name || "Tiêu chí chung";
+      const catCode = c.category?.code || "";
+
+      if (!map.has(catId)) {
+        map.set(catId, {
+          id: catId,
+          name: catName,
+          code: catCode,
+          criteria: [],
+        });
+      }
+      map.get(catId)!.criteria.push(c);
+    }
+
+    return Array.from(map.values());
+  }, [libraryCriteria]);
+
+  const filteredOrgs = useMemo(() => {
+    if (!allOrgs) return [];
+    if (!orgSearch.trim()) return allOrgs;
+    const q = orgSearch.toLowerCase().trim();
+    return allOrgs.filter(
+      (o) => o.name.toLowerCase().includes(q) || o.code.toLowerCase().includes(q)
+    );
+  }, [allOrgs, orgSearch]);
+
+  const filteredCategories = useMemo(() => {
+    if (!critSearch.trim()) return criteriaByCategory;
+    const q = critSearch.toLowerCase().trim();
+    return criteriaByCategory
+      .map((group) => {
+        const matchesCategory = group.name.toLowerCase().includes(q);
+        const matchingCriteria = group.criteria.filter(
+          (c) =>
+            matchesCategory ||
+            c.code.toLowerCase().includes(q) ||
+            c.title.toLowerCase().includes(q)
+        );
+        return {
+          ...group,
+          criteria: matchingCriteria,
+        };
+      })
+      .filter((group) => group.criteria.length > 0);
+  }, [criteriaByCategory, critSearch]);
+
+  const toggleOrg = (orgId: string) => {
+    setCreateSelectedOrgIds((prev) =>
+      prev.includes(orgId) ? prev.filter((id) => id !== orgId) : [...prev, orgId]
+    );
+  };
+
+  const toggleCategory = (catId: string) => {
+    const group = criteriaByCategory.find((g) => g.id === catId);
+    if (!group) return;
+    const catCritIds = group.criteria.map((c) => c.id);
+    const allSelected = catCritIds.every((id) => createSelectedCriteriaIds.includes(id));
+
+    if (allSelected) {
+      setCreateSelectedCriteriaIds((prev) => prev.filter((id) => !catCritIds.includes(id)));
+    } else {
+      setCreateSelectedCriteriaIds((prev) => Array.from(new Set([...prev, ...catCritIds])));
+    }
+  };
+
+  const toggleCriterion = (critId: string) => {
+    setCreateSelectedCriteriaIds((prev) =>
+      prev.includes(critId) ? prev.filter((id) => id !== critId) : [...prev, critId]
+    );
+  };
+
+  // Auto-fill default all orgs and criteria when loaded for create mode
+  useEffect(() => {
+    if (periodDialogOpen && !editingPeriod && !hasInitializedCreate) {
+      if (allOrgs && allOrgs.length > 0) {
+        setCreateSelectedOrgIds(allOrgs.map((o) => o.id));
+      }
+      if (libraryCriteria && libraryCriteria.length > 0) {
+        setCreateSelectedCriteriaIds(libraryCriteria.map((c) => c.id));
+      }
+      if (allOrgs && libraryCriteria) {
+        setHasInitializedCreate(true);
+      }
+    }
+  }, [periodDialogOpen, editingPeriod, hasInitializedCreate, allOrgs, libraryCriteria]);
 
   // Query details for configured period
   const { data: configuredData, refetch: refetchPeriodDetails } = useQuery({
@@ -192,15 +330,14 @@ export default function PeriodsPage() {
           .single();
         if (pErr) throw pErr;
 
-        // Auto snapshot criteria from library if enabled
-        if (values.autoPopulateCriteria && newPeriod) {
-          const { data: libCrit } = await supabase
-            .from("criteria_library")
-            .select("*, category:criteria_categories(*)")
-            .eq("is_active", true);
+        // Snapshot selected criteria from library
+        if (createSelectedCriteriaIds.length > 0 && newPeriod) {
+          const selectedLib = (libraryCriteria ?? []).filter((c) =>
+            createSelectedCriteriaIds.includes(c.id)
+          );
 
-          if (libCrit && libCrit.length > 0) {
-            const snapshots = libCrit.map((c: any) => ({
+          if (selectedLib.length > 0) {
+            const snapshots = selectedLib.map((c: any) => ({
               period_id: newPeriod.id,
               source_criteria_id: c.id,
               category_name_snapshot: c.category?.name || "Chung",
@@ -216,45 +353,39 @@ export default function PeriodsPage() {
               deadline_snapshot: c.deadline,
               sort_order: c.sort_order,
             }));
-            await supabase.from("period_criteria").insert(snapshots);
+            const { error: critErr } = await supabase.from("period_criteria").insert(snapshots);
+            if (critErr) throw critErr;
           }
         }
 
-        // Auto assign all active organizations if enabled
-        if (values.autoAssignAllOrgs && newPeriod) {
-          const { data: orgs } = await supabase
-            .from("organizations")
-            .select("id")
-            .eq("is_active", true);
+        // Assign selected organizations
+        if (createSelectedOrgIds.length > 0 && newPeriod) {
+          const orgRows = createSelectedOrgIds.map((orgId) => ({
+            period_id: newPeriod.id,
+            organization_id: orgId,
+            status: "assigned" as const,
+          }));
+          const { error: orgErr } = await supabase.from("organization_periods").insert(orgRows);
+          if (orgErr) throw orgErr;
 
-          if (orgs && orgs.length > 0) {
-            const orgRows = orgs.map((o) => ({
-              period_id: newPeriod.id,
-              organization_id: o.id,
-              status: "assigned" as const,
-            }));
-            await supabase.from("organization_periods").insert(orgRows);
+          // Send notification to users of selected organizations
+          if (values.autoActivate) {
+            const { data: users } = await supabase
+              .from("profiles")
+              .select("id")
+              .in("organization_id", createSelectedOrgIds)
+              .eq("role", "user");
 
-            // Send notification to users
-            if (values.autoActivate) {
-              const orgIds = orgs.map((o) => o.id);
-              const { data: users } = await supabase
-                .from("profiles")
-                .select("id")
-                .in("organization_id", orgIds)
-                .eq("role", "user");
-
-              if (users && users.length > 0) {
-                await supabase.from("notifications").insert(
-                  users.map((u) => ({
-                    recipient_id: u.id,
-                    title: "Đợt đánh giá mới đã chính thức mở",
-                    message: `Đợt đánh giá "${newPeriod.name}" đã mở tiếp nhận minh chứng.`,
-                    type: "period_opened",
-                    link_url: "/user/criteria",
-                  }))
-                );
-              }
+            if (users && users.length > 0) {
+              await supabase.from("notifications").insert(
+                users.map((u) => ({
+                  recipient_id: u.id,
+                  title: "Đợt đánh giá mới đã chính thức mở",
+                  message: `Đợt đánh giá "${newPeriod.name}" đã mở tiếp nhận minh chứng.`,
+                  type: "period_opened",
+                  link_url: "/user/criteria",
+                }))
+              );
             }
           }
         }
@@ -262,11 +393,14 @@ export default function PeriodsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["evaluation_periods"] });
+      queryClient.invalidateQueries({ queryKey: ["admin_periods_stats_counts"] });
       toast.success(editingPeriod ? "Đã cập nhật đợt đánh giá" : "Đã tạo đợt đánh giá mới");
       setPeriodDialogOpen(false);
       setEditingPeriod(null);
     },
-    onError: (err: Error) => toast.error("Lỗi: " + err.message),
+    onError: (err: Error) => {
+      toast.error("Không thể lưu: " + err.message);
+    },
   });
 
   // Change period status (Publish, Close, Archive)
@@ -367,6 +501,7 @@ export default function PeriodsPage() {
     },
     onSuccess: () => {
       refetchPeriodDetails();
+      queryClient.invalidateQueries({ queryKey: ["admin_periods_stats_counts"] });
       toast.success("Đã lưu bộ tiêu chí áp dụng cho đợt này!");
     },
     onError: (err: Error) => toast.error("Lỗi: " + err.message),
@@ -394,6 +529,7 @@ export default function PeriodsPage() {
     },
     onSuccess: () => {
       refetchPeriodDetails();
+      queryClient.invalidateQueries({ queryKey: ["admin_periods_stats_counts"] });
       toast.success("Đã lưu danh sách đơn vị tham gia!");
     },
     onError: (err: Error) => toast.error("Lỗi: " + err.message),
@@ -415,6 +551,19 @@ export default function PeriodsPage() {
       autoAssignAllOrgs: true,
       autoActivate: true,
     });
+    setCreateTab("orgs");
+    setOrgSearch("");
+    setCritSearch("");
+    setCreateSelectedOrgIds((allOrgs ?? []).map((o) => o.id));
+    setCreateSelectedCriteriaIds((libraryCriteria ?? []).map((c) => c.id));
+    setHasInitializedCreate(true);
+
+    const expandMap: Record<string, boolean> = {};
+    for (const group of criteriaByCategory) {
+      expandMap[group.id] = true;
+    }
+    setExpandedCategoryIds(expandMap);
+
     setPeriodDialogOpen(true);
   }
 
@@ -528,7 +677,7 @@ export default function PeriodsPage() {
                 >
                   <div
                     className="space-y-1 max-w-2xl cursor-pointer group"
-                    onClick={() => navigate(`/admin/review?period=${period.id}`)}
+                    onClick={() => openConfig(period)}
                   >
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold text-slate-900 text-base group-hover:text-blue-700 transition-colors">
@@ -539,33 +688,33 @@ export default function PeriodsPage() {
                     {period.description && (
                       <p className="text-sm text-muted-foreground line-clamp-1">{period.description}</p>
                     )}
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground pt-1 flex-wrap">
+                    <div className="flex items-center gap-3 sm:gap-4 text-xs text-muted-foreground pt-1 flex-wrap">
                       <span className="flex items-center gap-1">
-                        <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                        <Calendar className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                         Bắt đầu: {period.start_at ? new Date(period.start_at).toLocaleDateString("vi-VN") : "Chưa đặt"}
                       </span>
                       <span className="flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5 text-amber-500" />
+                        <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                         Hạn nộp: {period.submission_deadline ? new Date(period.submission_deadline).toLocaleDateString("vi-VN") : "Chưa đặt"}
                       </span>
                       <span className="flex items-center gap-1">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-blue-500" />
+                        <CheckCircle2 className="h-3.5 w-3.5 text-blue-500 shrink-0" />
                         Hạn thẩm định: {period.review_deadline ? new Date(period.review_deadline).toLocaleDateString("vi-VN") : "Chưa đặt"}
+                      </span>
+                      <span className="text-slate-300 hidden sm:inline">|</span>
+                      <span className="flex items-center gap-1 font-medium text-slate-700 bg-slate-100/90 border border-slate-200/80 px-2 py-0.5 rounded text-[11px]">
+                        <Layers className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                        {periodStats?.critCountByPeriod[period.id] ?? 0} tiêu chí
+                      </span>
+                      <span className="flex items-center gap-1 font-medium text-slate-700 bg-slate-100/90 border border-slate-200/80 px-2 py-0.5 rounded text-[11px]">
+                        <Building2 className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                        {periodStats?.orgCountByPeriod[period.id] ?? 0} đơn vị
                       </span>
                     </div>
                   </div>
 
                   {/* Actions */}
                   <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                    <Button
-                      size="sm"
-                      className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5 shadow-2xs font-medium"
-                      onClick={() => navigate(`/admin/review?period=${period.id}`)}
-                    >
-                      <CheckSquare className="h-3.5 w-3.5" />
-                      Thẩm định
-                    </Button>
-
                     <Button
                       variant="outline"
                       size="sm"
@@ -639,33 +788,39 @@ export default function PeriodsPage() {
       {/* DIALOG: CREATE / EDIT PERIOD */}
       {/* ============================================================ */}
       <Dialog open={periodDialogOpen} onOpenChange={(o) => !o && setPeriodDialogOpen(false)}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editingPeriod ? "Chỉnh sửa đợt đánh giá" : "Tạo đợt đánh giá mới"}</DialogTitle>
-            <DialogDescription>
-              Thiết lập tên đợt và các mốc thời gian nộp bài, thẩm định.
+        <DialogContent className="w-[95vw] sm:max-w-2xl lg:max-w-3xl max-h-[92vh] flex flex-col p-4 sm:p-6 overflow-hidden rounded-xl">
+          <DialogHeader className="shrink-0 pb-1 text-left">
+            <DialogTitle className="text-lg sm:text-xl font-bold text-slate-900">
+              {editingPeriod ? "Chỉnh sửa đợt đánh giá" : "Tạo đợt đánh giá mới"}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              {editingPeriod
+                ? "Cập nhật thông tin thời gian, kế hoạch triển khai của đợt đánh giá."
+                : "Thiết lập đợt thi đua, chọn Đoàn cơ sở tham gia và chọn các nhóm tiêu chí áp dụng."}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-3">
+          <div className="flex-1 overflow-y-auto pr-1 space-y-4 py-2">
             <div>
-              <Label htmlFor="p-name">
+              <Label htmlFor="p-name" className="text-xs font-semibold text-slate-800">
                 Tên đợt đánh giá <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="p-name"
-                placeholder="VD: Đánh giá công tác Đoàn năm 2024"
-                className="mt-1"
+                placeholder="VD: Đánh giá công tác Đoàn năm 2026"
+                className="mt-1 text-xs sm:text-sm h-9 sm:h-10"
                 value={periodForm.name}
                 onChange={(e) => setPeriodForm({ ...periodForm, name: e.target.value })}
               />
             </div>
             <div>
-              <Label htmlFor="p-desc">Mô tả / Kế hoạch triển khai</Label>
+              <Label htmlFor="p-desc" className="text-xs font-semibold text-slate-800">
+                Mô tả / Kế hoạch triển khai
+              </Label>
               <Textarea
                 id="p-desc"
                 placeholder="Mô tả mục đích, căn cứ pháp lý triển khai đợt đánh giá..."
-                className="mt-1"
+                className="mt-1 text-xs sm:text-sm resize-none"
                 rows={2}
                 value={periodForm.description}
                 onChange={(e) => setPeriodForm({ ...periodForm, description: e.target.value })}
@@ -673,77 +828,345 @@ export default function PeriodsPage() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <Label htmlFor="p-start">Ngày bắt đầu</Label>
+                <Label htmlFor="p-start" className="text-xs font-semibold text-slate-800">
+                  Ngày bắt đầu
+                </Label>
                 <Input
                   id="p-start"
                   type="date"
-                  className="mt-1 text-xs"
+                  className="mt-1 text-xs h-9"
                   value={periodForm.start_at}
                   onChange={(e) => setPeriodForm({ ...periodForm, start_at: e.target.value })}
                 />
               </div>
               <div>
-                <Label htmlFor="p-sub-dead">Hạn nộp minh chứng</Label>
+                <Label htmlFor="p-sub-dead" className="text-xs font-semibold text-slate-800">
+                  Hạn nộp minh chứng
+                </Label>
                 <Input
                   id="p-sub-dead"
                   type="date"
-                  className="mt-1 text-xs"
+                  className="mt-1 text-xs h-9"
                   value={periodForm.submission_deadline}
                   onChange={(e) => setPeriodForm({ ...periodForm, submission_deadline: e.target.value })}
                 />
               </div>
               <div>
-                <Label htmlFor="p-rev-dead">Hạn thẩm định</Label>
+                <Label htmlFor="p-rev-dead" className="text-xs font-semibold text-slate-800">
+                  Hạn thẩm định
+                </Label>
                 <Input
                   id="p-rev-dead"
                   type="date"
-                  className="mt-1 text-xs"
+                  className="mt-1 text-xs h-9"
                   value={periodForm.review_deadline}
                   onChange={(e) => setPeriodForm({ ...periodForm, review_deadline: e.target.value })}
                 />
               </div>
             </div>
 
-            {/* Quick Setup for New Period */}
+            {/* Multiple Choices Selection for New Period */}
             {!editingPeriod && (
-              <div className="border rounded-lg p-3 bg-blue-50/60 border-blue-200 space-y-2.5">
-                <span className="text-xs font-semibold text-blue-900 block">
-                  Thiết lập tự động (Khuyến nghị):
-                </span>
-                <label className="flex items-center space-x-2 text-xs text-slate-800 cursor-pointer">
-                  <Checkbox
-                    checked={periodForm.autoPopulateCriteria}
-                    onCheckedChange={(c) =>
-                      setPeriodForm({ ...periodForm, autoPopulateCriteria: !!c })
-                    }
-                  />
-                  <span>Tự động sao chép toàn bộ tiêu chí đang hoạt động vào đợt này</span>
-                </label>
-                <label className="flex items-center space-x-2 text-xs text-slate-800 cursor-pointer">
-                  <Checkbox
-                    checked={periodForm.autoAssignAllOrgs}
-                    onCheckedChange={(c) =>
-                      setPeriodForm({ ...periodForm, autoAssignAllOrgs: !!c })
-                    }
-                  />
-                  <span>Tự động gán tất cả Đoàn cơ sở tham gia đợt đánh giá</span>
-                </label>
-                <label className="flex items-center space-x-2 text-xs text-slate-800 cursor-pointer">
-                  <Checkbox
-                    checked={periodForm.autoActivate}
-                    onCheckedChange={(c) =>
-                      setPeriodForm({ ...periodForm, autoActivate: !!c })
-                    }
-                  />
-                  <span className="font-medium text-emerald-800">
-                    Kích hoạt mở đợt ngay lập tức (các tài khoản cơ sở thấy tiêu chí ngay)
-                  </span>
-                </label>
+              <div className="border border-slate-200 rounded-xl p-3 sm:p-4 bg-slate-50/70 space-y-3">
+                <Tabs value={createTab} onValueChange={(v) => setCreateTab(v as any)} className="w-full flex flex-col">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 pb-2.5">
+                    <TabsList className="grid grid-cols-2 w-full sm:w-[380px] bg-slate-200/80 p-0.5">
+                      <TabsTrigger
+                        value="orgs"
+                        className="text-xs gap-1.5 data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-xs"
+                      >
+                        <Building2 className="h-3.5 w-3.5" />
+                        Đoàn cơ sở ({createSelectedOrgIds.length}/{allOrgs?.length || 0})
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="criteria"
+                        className="text-xs gap-1.5 data-[state=active]:bg-white data-[state=active]:text-emerald-700 data-[state=active]:shadow-xs"
+                      >
+                        <ClipboardList className="h-3.5 w-3.5" />
+                        Tiêu chí theo nhóm ({createSelectedCriteriaIds.length}/{libraryCriteria?.length || 0})
+                      </TabsTrigger>
+                    </TabsList>
+
+                    <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 self-end sm:self-auto">
+                      <span>Đã chọn:</span>
+                      <Badge variant="outline" className="text-[11px] font-semibold bg-blue-50 text-blue-700 border-blue-200">
+                        {createSelectedOrgIds.length} cơ sở
+                      </Badge>
+                      <span>•</span>
+                      <Badge variant="outline" className="text-[11px] font-semibold bg-emerald-50 text-emerald-700 border-emerald-200">
+                        {createSelectedCriteriaIds.length} tiêu chí
+                      </Badge>
+                    </div>
+                  </div>
+
+                  {/* TAB 1: ĐOÀN CƠ SỞ THAM GIA */}
+                  <TabsContent value="orgs" className="mt-3 space-y-2.5 focus-visible:outline-none">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="relative flex-1 max-w-sm">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                        <Input
+                          placeholder="Tìm kiếm mã hoặc tên đoàn cơ sở..."
+                          value={orgSearch}
+                          onChange={(e) => setOrgSearch(e.target.value)}
+                          className="pl-8 h-8 text-xs bg-white"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-7 px-2.5 text-blue-700 hover:text-blue-800 bg-white"
+                          onClick={() => setCreateSelectedOrgIds((allOrgs ?? []).map((o) => o.id))}
+                        >
+                          Chọn tất cả ({allOrgs?.length || 0})
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs h-7 px-2.5 text-slate-600 hover:text-slate-800"
+                          onClick={() => setCreateSelectedOrgIds([])}
+                        >
+                          Bỏ chọn
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="border border-slate-200 rounded-lg bg-white max-h-56 overflow-y-auto p-2">
+                      {filteredOrgs.length === 0 ? (
+                        <div className="text-center py-6 text-xs text-muted-foreground">
+                          {orgSearch ? "Không tìm thấy đoàn cơ sở phù hợp." : "Chưa có danh sách đơn vị."}
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                          {filteredOrgs.map((o) => {
+                            const checked = createSelectedOrgIds.includes(o.id);
+                            return (
+                              <label
+                                key={o.id}
+                                className={cn(
+                                  "flex items-start gap-2.5 p-2 rounded-md border cursor-pointer transition-colors text-xs",
+                                  checked
+                                    ? "bg-blue-50/60 border-blue-200 text-blue-950 font-medium"
+                                    : "bg-white border-slate-100 hover:bg-slate-50 text-slate-700"
+                                )}
+                              >
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={() => toggleOrg(o.id)}
+                                  className="mt-0.5"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-mono text-[11px] font-semibold text-blue-700 shrink-0">
+                                      [{o.code}]
+                                    </span>
+                                    <span className="line-clamp-1">{o.name}</span>
+                                  </div>
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </TabsContent>
+
+                  {/* TAB 2: TIÊU CHÍ THEO NHÓM */}
+                  <TabsContent value="criteria" className="mt-3 space-y-2.5 focus-visible:outline-none">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="relative flex-1 max-w-sm">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                        <Input
+                          placeholder="Tìm mã hoặc tên tiêu chí..."
+                          value={critSearch}
+                          onChange={(e) => setCritSearch(e.target.value)}
+                          className="pl-8 h-8 text-xs bg-white"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap self-end sm:self-auto">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-7 px-2.5 text-emerald-700 hover:text-emerald-800 bg-white"
+                          onClick={() => setCreateSelectedCriteriaIds((libraryCriteria ?? []).map((c) => c.id))}
+                        >
+                          Chọn tất cả ({libraryCriteria?.length || 0})
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs h-7 px-2.5 text-slate-600 hover:text-slate-800"
+                          onClick={() => setCreateSelectedCriteriaIds([])}
+                        >
+                          Bỏ chọn
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs h-7 px-2 text-slate-600 hover:text-slate-800"
+                          onClick={() => {
+                            const allExpanded = Object.values(expandedCategoryIds).every(Boolean);
+                            const nextState: Record<string, boolean> = {};
+                            criteriaByCategory.forEach((g) => {
+                              nextState[g.id] = !allExpanded;
+                            });
+                            setExpandedCategoryIds(nextState);
+                          }}
+                        >
+                          {Object.values(expandedCategoryIds).every(Boolean) ? "Thu gọn" : "Mở rộng"}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="border border-slate-200 rounded-lg bg-white max-h-64 overflow-y-auto divide-y divide-slate-200">
+                      {filteredCategories.length === 0 ? (
+                        <div className="text-center py-6 text-xs text-muted-foreground">
+                          {critSearch ? "Không tìm thấy tiêu chí phù hợp." : "Chưa có danh mục tiêu chí."}
+                        </div>
+                      ) : (
+                        filteredCategories.map((group) => {
+                          const catCritIds = group.criteria.map((c) => c.id);
+                          const selectedInCat = catCritIds.filter((id) => createSelectedCriteriaIds.includes(id));
+                          const allSelected = catCritIds.length > 0 && selectedInCat.length === catCritIds.length;
+                          const isExpanded = expandedCategoryIds[group.id] !== false;
+                          const totalCatPoints = group.criteria.reduce((sum, c) => sum + (c.max_score || 0), 0);
+
+                          return (
+                            <div key={group.id} className="divide-y divide-slate-100">
+                              <div
+                                className={cn(
+                                  "flex items-center justify-between p-2.5 transition-colors cursor-pointer select-none",
+                                  allSelected
+                                    ? "bg-emerald-50/50 hover:bg-emerald-50"
+                                    : selectedInCat.length > 0
+                                    ? "bg-amber-50/40 hover:bg-amber-50"
+                                    : "bg-slate-50/60 hover:bg-slate-100/60"
+                                )}
+                                onClick={() => {
+                                  setExpandedCategoryIds((prev) => ({
+                                    ...prev,
+                                    [group.id]: !isExpanded,
+                                  }));
+                                }}
+                              >
+                                <div className="flex items-center gap-2.5 flex-1 min-w-0 pr-2">
+                                  <div
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleCategory(group.id);
+                                    }}
+                                    className="p-0.5 cursor-pointer"
+                                  >
+                                    <Checkbox
+                                      checked={allSelected}
+                                      onCheckedChange={() => toggleCategory(group.id)}
+                                    />
+                                  </div>
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="font-semibold text-xs text-slate-900 line-clamp-1">
+                                      {group.name}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <Badge
+                                    variant="outline"
+                                    className={cn(
+                                      "text-[10px] font-mono",
+                                      allSelected
+                                        ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                        : selectedInCat.length > 0
+                                        ? "bg-amber-100 text-amber-800 border-amber-300"
+                                        : "bg-slate-100 text-slate-600 border-slate-200"
+                                    )}
+                                  >
+                                    {selectedInCat.length}/{catCritIds.length} tiêu chí ({totalCatPoints}đ)
+                                  </Badge>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-slate-400 hover:text-slate-600 p-0"
+                                  >
+                                    {isExpanded ? (
+                                      <ChevronDown className="h-4 w-4" />
+                                    ) : (
+                                      <ChevronRight className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </div>
+                              </div>
+
+                              {isExpanded && (
+                                <div className="p-1.5 pl-6 bg-white space-y-1">
+                                  {group.criteria.map((c) => {
+                                    const checked = createSelectedCriteriaIds.includes(c.id);
+                                    return (
+                                      <label
+                                        key={c.id}
+                                        className={cn(
+                                          "flex items-start gap-2.5 p-2 rounded border cursor-pointer transition-colors text-xs",
+                                          checked
+                                            ? "bg-emerald-50/40 border-emerald-200 text-slate-900 font-medium"
+                                            : "bg-white border-transparent hover:bg-slate-50 text-slate-600"
+                                        )}
+                                      >
+                                        <Checkbox
+                                          checked={checked}
+                                          onCheckedChange={() => toggleCriterion(c.id)}
+                                          className="mt-0.5"
+                                        />
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2">
+                                            <span className="font-mono text-xs font-semibold text-emerald-700">
+                                              {c.code}
+                                            </span>
+                                            <span className="text-[11px] text-muted-foreground">
+                                              (Tối đa {c.max_score}đ)
+                                            </span>
+                                          </div>
+                                          <p className="text-xs text-slate-800 mt-0.5 line-clamp-2">
+                                            {c.title}
+                                          </p>
+                                        </div>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </TabsContent>
+                </Tabs>
+
+                {/* Auto-activate toggle */}
+                <div className="pt-2 border-t border-slate-200">
+                  <label className="flex items-center space-x-2 text-xs text-slate-800 cursor-pointer">
+                    <Checkbox
+                      checked={periodForm.autoActivate}
+                      onCheckedChange={(c) =>
+                        setPeriodForm({ ...periodForm, autoActivate: !!c })
+                      }
+                    />
+                    <span className="font-medium text-emerald-800">
+                      Kích hoạt mở đợt ngay lập tức (cho phép các Đoàn cơ sở được chọn nộp minh chứng ngay)
+                    </span>
+                  </label>
+                </div>
               </div>
             )}
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="shrink-0 pt-3 border-t">
             <Button variant="outline" onClick={() => setPeriodDialogOpen(false)}>
               Hủy
             </Button>
@@ -753,12 +1176,22 @@ export default function PeriodsPage() {
                   toast.error("Vui lòng nhập tên đợt đánh giá.");
                   return;
                 }
+                if (!editingPeriod) {
+                  if (createSelectedOrgIds.length === 0) {
+                    toast.error("Vui lòng chọn ít nhất 1 Đoàn cơ sở tham gia đợt đánh giá.");
+                    return;
+                  }
+                  if (createSelectedCriteriaIds.length === 0) {
+                    toast.error("Vui lòng chọn ít nhất 1 tiêu chí cho đợt đánh giá.");
+                    return;
+                  }
+                }
                 savePeriodMutation.mutate(periodForm);
               }}
               disabled={savePeriodMutation.isPending}
             >
               {savePeriodMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {editingPeriod ? "Cập nhật" : "Tạo đợt"}
+              {editingPeriod ? "Cập nhật" : "Tạo đợt đánh giá"}
             </Button>
           </DialogFooter>
         </DialogContent>

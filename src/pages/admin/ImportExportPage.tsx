@@ -85,7 +85,7 @@ export default function ImportExportPage() {
       Requires_Doc2: "TRUE",
       Requires_Link3: "TRUE",
       Responsible_Unit: "Ban Tuyên giáo",
-      Deadline: "2024-11-30",
+      Deadline: "2026-11-30",
       Display_Order: 1,
     });
 
@@ -101,7 +101,7 @@ export default function ImportExportPage() {
       Requires_Doc2: "TRUE",
       Requires_Link3: "FALSE",
       Responsible_Unit: "Ban Phong trào",
-      Deadline: "2024-12-15",
+      Deadline: "2026-12-15",
       Display_Order: 2,
     });
 

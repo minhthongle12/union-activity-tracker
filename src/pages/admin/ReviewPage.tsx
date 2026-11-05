@@ -631,125 +631,107 @@ export default function ReviewPage() {
           </CardContent>
         </Card>
 
-        {/* Periods Grid */}
-        {periodsLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {[1, 2, 3].map((i) => (
-              <Card key={i} className="animate-pulse p-6 space-y-4">
-                <div className="h-6 bg-slate-200 rounded w-3/4" />
-                <div className="h-4 bg-slate-100 rounded w-1/2" />
-                <div className="h-16 bg-slate-50 rounded" />
-                <div className="h-9 bg-slate-200 rounded" />
-              </Card>
-            ))}
-          </div>
-        ) : filteredPeriodsList.length === 0 ? (
-          <Card className="p-12 text-center text-sm text-muted-foreground border-dashed">
-            <Calendar className="h-12 w-12 mx-auto mb-3 text-slate-300" />
-            <p className="font-medium text-slate-700">Không tìm thấy đợt đánh giá nào</p>
-            <p className="text-xs text-slate-400 mt-1">
-              {overviewSearch || overviewStatus !== "all"
-                ? "Thử tìm kiếm với từ khóa khác hoặc kiểm tra lại bộ lọc trạng thái."
-                : "Chưa có đợt đánh giá nào được tạo trong hệ thống."}
-            </p>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredPeriodsList.map((p) => {
-              const critCount = allPeriodsStats?.critByPeriod[p.id] ?? 0;
-              const orgCount = allPeriodsStats?.orgCountByPeriod[p.id] ?? 0;
-              const pStats = allPeriodsStats?.statsByPeriod[p.id] ?? {
-                submitted: 0,
-                verified: 0,
-                revision_requested: 0,
-                total: 0,
-              };
+        {/* Periods List (Each period is 1 unified row) */}
+        <Card className="border-slate-200 shadow-2xs overflow-hidden">
+          <CardContent className="p-0">
+            {periodsLoading ? (
+              <div className="p-6 space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-20 bg-slate-100 rounded-lg animate-pulse" />
+                ))}
+              </div>
+            ) : filteredPeriodsList.length === 0 ? (
+              <div className="p-12 text-center text-sm text-muted-foreground">
+                <Calendar className="h-12 w-12 mx-auto mb-3 text-slate-300" />
+                <p className="font-medium text-slate-700">Không tìm thấy đợt đánh giá nào</p>
+                <p className="text-xs text-slate-400 mt-1">
+                  {overviewSearch || overviewStatus !== "all"
+                    ? "Thử tìm kiếm với từ khóa khác hoặc kiểm tra lại bộ lọc trạng thái."
+                    : "Chưa có đợt đánh giá nào được tạo trong hệ thống."}
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {filteredPeriodsList.map((p) => {
+                  const critCount = allPeriodsStats?.critByPeriod[p.id] ?? 0;
+                  const orgCount = allPeriodsStats?.orgCountByPeriod[p.id] ?? 0;
+                  const pStats = allPeriodsStats?.statsByPeriod[p.id] ?? {
+                    submitted: 0,
+                    verified: 0,
+                    revision_requested: 0,
+                    total: 0,
+                  };
 
-              return (
-                <Card
-                  key={p.id}
-                  onClick={() => setSearchParams({ period: p.id })}
-                  className="border border-slate-200 bg-white hover:border-blue-400 hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col justify-between rounded-xl overflow-hidden group"
-                >
-                  <CardContent className="p-5 space-y-4">
-                    {/* Top: Name & Badges */}
-                    <div className="space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="font-semibold text-slate-900 group-hover:text-blue-700 transition-colors line-clamp-2 text-base">
-                          {p.name}
-                        </h3>
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {renderPeriodStatusBadge(p.status)}
-                      </div>
-                      {p.description && (
-                        <p className="text-xs text-muted-foreground line-clamp-2 pt-0.5">
-                          {p.description}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Dates block */}
-                    <div className="bg-slate-50/80 rounded-lg p-3 text-xs space-y-1.5 border border-slate-100">
-                      <div className="flex items-center justify-between text-slate-600">
-                        <span className="flex items-center gap-1.5">
-                          <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                          Bắt đầu:
-                        </span>
-                        <span className="font-medium text-slate-800">{formatDateDisplay(p.start_at)}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-slate-600">
-                        <span className="flex items-center gap-1.5">
-                          <Clock className="h-3.5 w-3.5 text-amber-500" />
-                          Hạn nộp MC:
-                        </span>
-                        <span className="font-medium text-amber-800">{formatDateDisplay(p.submission_deadline)}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-slate-600">
-                        <span className="flex items-center gap-1.5">
-                          <CheckCircle2 className="h-3.5 w-3.5 text-blue-500" />
-                          Hạn thẩm định:
-                        </span>
-                        <span className="font-medium text-blue-800">{formatDateDisplay(p.review_deadline)}</span>
-                      </div>
-                    </div>
-
-                    {/* Stats pills */}
-                    <div className="space-y-2 pt-1">
-                      <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                        <div className="bg-orange-50 border border-orange-200 rounded-lg p-2">
-                          <span className="text-[10px] text-orange-700 uppercase font-semibold block">Chờ thẩm định</span>
-                          <span className="text-base font-bold text-orange-900">{pStats.submitted}</span>
+                  return (
+                    <div
+                      key={p.id}
+                      onClick={() => setSearchParams({ period: p.id })}
+                      className="p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 hover:bg-slate-50/80 transition-colors cursor-pointer group"
+                    >
+                      {/* Left: Name, Description & Timelines */}
+                      <div className="space-y-1.5 flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-semibold text-slate-900 group-hover:text-blue-700 transition-colors text-base line-clamp-1">
+                            {p.name}
+                          </h3>
+                          {renderPeriodStatusBadge(p.status)}
                         </div>
-                        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2">
-                          <span className="text-[10px] text-emerald-700 uppercase font-semibold block">Đã xác thực</span>
-                          <span className="text-base font-bold text-emerald-900">{pStats.verified}</span>
-                        </div>
-                        <div className="bg-red-50 border border-red-200 rounded-lg p-2">
-                          <span className="text-[10px] text-red-700 uppercase font-semibold block">Cần bổ sung</span>
-                          <span className="text-base font-bold text-red-900">{pStats.revision_requested}</span>
+
+                        {p.description && (
+                          <p className="text-xs text-muted-foreground line-clamp-1">
+                            {p.description}
+                          </p>
+                        )}
+
+                        <div className="flex items-center gap-3 sm:gap-4 text-xs text-muted-foreground pt-0.5 flex-wrap">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                            Bắt đầu: <strong className="text-slate-700 font-medium">{formatDateDisplay(p.start_at)}</strong>
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                            Hạn nộp MC: <strong className="text-amber-800 font-medium">{formatDateDisplay(p.submission_deadline)}</strong>
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                            Hạn thẩm định: <strong className="text-blue-800 font-medium">{formatDateDisplay(p.review_deadline)}</strong>
+                          </span>
+                          <span className="text-slate-300 hidden sm:inline">|</span>
+                          <span className="flex items-center gap-1 font-medium text-slate-600">
+                            <Layers className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                            {critCount} tiêu chí
+                          </span>
+                          <span className="flex items-center gap-1 font-medium text-slate-600">
+                            <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                            {orgCount} đơn vị
+                          </span>
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between text-[11px] text-slate-500 px-1 pt-1">
-                        <span className="flex items-center gap-1">
-                          <Layers className="h-3.5 w-3.5 text-slate-400" />
-                          {critCount} tiêu chí
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Building2 className="h-3.5 w-3.5 text-slate-400" />
-                          {orgCount} đơn vị
-                        </span>
+                      {/* Right: Metrics */}
+                      <div className="flex items-center shrink-0 self-start lg:self-center">
+                        <div className="grid grid-cols-3 gap-2 text-center text-xs w-full sm:w-auto">
+                          <div className="bg-orange-50/90 border border-orange-200/90 rounded-lg px-2.5 py-1.5 min-w-[85px]">
+                            <span className="text-[10px] text-orange-700 uppercase font-semibold block whitespace-nowrap">Chờ thẩm định</span>
+                            <span className="text-sm sm:text-base font-bold text-orange-900">{pStats.submitted}</span>
+                          </div>
+                          <div className="bg-emerald-50/90 border border-emerald-200/90 rounded-lg px-2.5 py-1.5 min-w-[85px]">
+                            <span className="text-[10px] text-emerald-700 uppercase font-semibold block whitespace-nowrap">Đã xác thực</span>
+                            <span className="text-sm sm:text-base font-bold text-emerald-900">{pStats.verified}</span>
+                          </div>
+                          <div className="bg-red-50/90 border border-red-200/90 rounded-lg px-2.5 py-1.5 min-w-[85px]">
+                            <span className="text-[10px] text-red-700 uppercase font-semibold block whitespace-nowrap">Cần bổ sung</span>
+                            <span className="text-sm sm:text-base font-bold text-red-900">{pStats.revision_requested}</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
-
-                
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     );
   }
