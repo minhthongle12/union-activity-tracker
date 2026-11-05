@@ -30,6 +30,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { PWAInstallPrompt } from "@/components/pwa/PWAInstallPrompt";
 
 const navItems = [
   { to: "/user", icon: LayoutDashboard, label: "Tổng quan", end: true },
@@ -230,9 +231,88 @@ export function UserLayout() {
         </header>
 
         {/* Page body */}
-        <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-3 sm:p-4 md:p-6 lg:p-8 max-w-7xl w-full mx-auto pb-24 md:pb-8">
           <Outlet />
         </main>
+
+        {/* Mobile Bottom Navigation Bar (PWA Style) */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 flex items-center justify-around px-2 py-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-lg">
+          <NavLink
+            to="/user"
+            end
+            className={({ isActive }) =>
+              cn(
+                "flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-lg text-[10px] font-medium transition-colors",
+                isActive ? "text-blue-600 font-semibold" : "text-slate-500 hover:text-slate-900"
+              )
+            }
+          >
+            <LayoutDashboard className="h-5 w-5 mb-0.5" />
+            <span>Tổng quan</span>
+          </NavLink>
+
+          <NavLink
+            to="/user/criteria"
+            className={({ isActive }) =>
+              cn(
+                "flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-lg text-[10px] font-medium transition-colors",
+                isActive ? "text-blue-600 font-semibold" : "text-slate-500 hover:text-slate-900"
+              )
+            }
+          >
+            <ClipboardList className="h-5 w-5 mb-0.5" />
+            <span>Tiêu chí</span>
+          </NavLink>
+
+          <NavLink
+            to="/user/bonus"
+            className={({ isActive }) =>
+              cn(
+                "flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-lg text-[10px] font-medium transition-colors",
+                isActive ? "text-blue-600 font-semibold" : "text-slate-500 hover:text-slate-900"
+              )
+            }
+          >
+            <Award className="h-5 w-5 mb-0.5" />
+            <span>Điểm cộng</span>
+          </NavLink>
+
+          <NavLink
+            to="/user/results"
+            className={({ isActive }) =>
+              cn(
+                "flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-lg text-[10px] font-medium transition-colors",
+                isActive ? "text-blue-600 font-semibold" : "text-slate-500 hover:text-slate-900"
+              )
+            }
+          >
+            <Trophy className="h-5 w-5 mb-0.5" />
+            <span>Kết quả</span>
+          </NavLink>
+
+          <NavLink
+            to="/user/notifications"
+            className={({ isActive }) =>
+              cn(
+                "flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-lg text-[10px] font-medium transition-colors relative",
+                isActive ? "text-blue-600 font-semibold" : "text-slate-500 hover:text-slate-900"
+              )
+            }
+          >
+            <div className="relative">
+              <Bell className="h-5 w-5 mb-0.5" />
+              {(unreadCount ?? 0) > 0 && (
+                <span className="absolute -top-1 -right-2 flex h-3.5 min-w-3.5 px-0.5 items-center justify-center rounded-full bg-blue-600 text-[9px] font-bold text-white">
+                  {unreadCount! > 99 ? "99+" : unreadCount}
+                </span>
+              )}
+            </div>
+            <span>Thông báo</span>
+          </NavLink>
+        </nav>
+
+        {/* PWA Install Banner */}
+        <PWAInstallPrompt />
       </div>
     </div>
   );

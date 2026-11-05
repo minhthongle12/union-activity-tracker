@@ -15,6 +15,10 @@ import {
   Save,
   LogOut,
   Loader2,
+  Smartphone,
+  Download,
+  CheckCircle2,
+  Share,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
@@ -192,6 +196,48 @@ export default function UserAccountPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* PWA App Information Card */}
+      <Card className="border-slate-200 bg-gradient-to-br from-slate-900 to-slate-800 text-white shadow-md">
+        <CardContent className="pt-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 rounded-xl bg-white p-1 flex items-center justify-center shrink-0 shadow">
+                <img src="/huy-hieu-doan.png" alt="Huy hiệu Đoàn" className="h-full w-full object-contain" />
+              </div>
+              <div>
+                <h4 className="font-semibold text-base text-white flex items-center gap-2">
+                  Ứng dụng di động (PWA)
+                  <Badge variant="outline" className="border-emerald-400/50 bg-emerald-500/20 text-emerald-300 text-[10px]">
+                    Sẵn sàng
+                  </Badge>
+                </h4>
+                <p className="text-xs text-slate-300 mt-1 max-w-xl">
+                  Bạn có thể cài đặt trực tiếp website này thành ứng dụng trên điện thoại (iOS & Android) để mở nhanh từ màn hình chính và nhận thông báo đẩy tức thì.
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const isStandalone =
+                  window.matchMedia("(display-mode: standalone)").matches ||
+                  (window.navigator as any).standalone === true;
+                if (isStandalone) {
+                  toast.success("Ứng dụng đã được cài đặt và đang chạy ở chế độ App.");
+                } else {
+                  toast.info("Trên iPhone: Chọn Chia sẻ (Share) > Thêm vào MH chính. Trên Android: Chọn Cài đặt ứng dụng từ menu trình duyệt.");
+                }
+              }}
+              className="bg-white/10 hover:bg-white/20 text-white border-white/20 gap-1.5 shrink-0 text-xs"
+            >
+              <Smartphone className="h-3.5 w-3.5" />
+              Hướng dẫn cài đặt
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="pt-4 flex justify-end">
         <Button

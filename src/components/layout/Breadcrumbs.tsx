@@ -25,10 +25,10 @@ export function Breadcrumbs() {
   const pathnames = location.pathname.split("/").filter((x) => x);
 
   return (
-    <nav className="flex items-center space-x-1 text-sm text-muted-foreground" aria-label="Breadcrumb">
+    <nav className="flex items-center space-x-1 text-xs sm:text-sm text-muted-foreground min-w-0" aria-label="Breadcrumb">
       <Link
         to={pathnames[0] === "admin" ? "/admin" : "/user"}
-        className="flex items-center hover:text-foreground transition-colors"
+        className="flex items-center hover:text-foreground transition-colors shrink-0"
       >
         <Home className="h-4 w-4" />
       </Link>
@@ -38,12 +38,12 @@ export function Breadcrumbs() {
         const name = routeNames[value] || value;
 
         return (
-          <div key={to} className="flex items-center space-x-1">
-            <ChevronRight className="h-4 w-4 text-muted-foreground/60" />
+          <div key={to} className="flex items-center space-x-1 min-w-0">
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
             {isLast ? (
-              <span className="font-medium text-foreground">{name}</span>
+              <span className="font-medium text-foreground truncate max-w-[130px] sm:max-w-xs">{name}</span>
             ) : (
-              <Link to={to} className="hover:text-foreground transition-colors">
+              <Link to={to} className="hover:text-foreground transition-colors truncate max-w-[90px] sm:max-w-xs">
                 {name}
               </Link>
             )}
