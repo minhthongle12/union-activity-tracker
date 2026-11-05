@@ -17,8 +17,8 @@ self.addEventListener("push", (event) => {
     const title = payload.title || "Công tác Đoàn - Thông báo";
     const options = {
       body: payload.message || "Bạn có thông báo mới từ hệ thống.",
-      icon: "/vite.svg",
-      badge: "/vite.svg",
+      icon: "/huy-hieu-doan.png",
+      badge: "/huy-hieu-doan.png",
       data: {
         url: payload.url || "/",
       },
@@ -29,7 +29,8 @@ self.addEventListener("push", (event) => {
     const title = "Công tác Đoàn - Thông báo";
     const options = {
       body: event.data.text(),
-      icon: "/vite.svg",
+      icon: "/huy-hieu-doan.png",
+      badge: "/huy-hieu-doan.png",
     };
     event.waitUntil(self.registration.showNotification(title, options));
   }

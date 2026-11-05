@@ -63,7 +63,7 @@ export function useRealtimeNotifications() {
             try {
               new Notification(newNotif.title || "Công tác Đoàn", {
                 body: newNotif.message,
-                icon: "/vite.svg",
+                icon: "/huy-hieu-doan.png",
               });
             } catch (err) {
               console.warn("Lỗi kích hoạt thông báo cục bộ:", err);

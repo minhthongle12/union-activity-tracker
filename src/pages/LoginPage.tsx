@@ -48,8 +48,12 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Logo / Brand */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-slate-900 shadow-lg mb-4">
-            <ShieldCheck className="h-8 w-8 text-white" />
+          <div className="inline-flex items-center justify-center h-20 w-20 rounded-full bg-white shadow-md p-1.5 mb-4 border border-slate-200">
+            <img
+              src="/huy-hieu-doan.png"
+              alt="Huy hiệu Đoàn TNCS Hồ Chí Minh"
+              className="h-full w-full object-contain"
+            />
           </div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             Hệ thống Quản lý Công tác Đoàn

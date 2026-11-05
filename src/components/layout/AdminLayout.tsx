@@ -99,10 +99,12 @@ export function AdminLayout() {
       >
         {/* Brand header */}
         <div className="h-16 px-4 flex items-center justify-between border-b border-slate-800 bg-slate-950">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-red-600 flex items-center justify-center font-bold text-white shadow">
-              Đ
-            </div>
+          <div className="flex items-center gap-2.5">
+            <img
+              src="/huy-hieu-doan.png"
+              alt="Huy hiệu Đoàn"
+              className="h-8 w-8 object-contain shrink-0 drop-shadow"
+            />
             <div className="flex flex-col">
               <span className="font-semibold text-sm tracking-wide text-white leading-tight">
                 CÔNG TÁC ĐOÀN
