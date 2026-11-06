@@ -127,27 +127,44 @@ export default function UserDashboardPage() {
     enabled: !!profile?.id,
   });
 
+  // 4. Fetch organization data if not joined
+  const { data: orgData } = useQuery({
+    queryKey: ["user_dashboard_org", profile?.organization_id],
+    queryFn: async () => {
+      if (!profile?.organization_id) return null;
+      const { data } = await supabase
+        .from("organizations")
+        .select("*")
+        .eq("id", profile.organization_id)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!profile?.organization_id,
+    initialData: profile?.organization ?? undefined,
+  });
+
+  const organization = profile?.organization || orgData;
+
   const totalCriteria = stats?.totalCriteria ?? 0;
   const submitted = stats?.submitted ?? 0;
   const progress = totalCriteria > 0 ? Math.round((submitted / totalCriteria) * 100) : 0;
 
   return (
     <div className="space-y-6 text-slate-900">
-      {/* Welcome */}
+      {/* Welcome Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-950">
             Xin chào, {profile?.display_name || "Liên đội"}
           </h1>
-          <p className="text-sm text-slate-700 mt-1 flex items-center gap-2">
-            <Building className="h-4 w-4 text-emerald-700" />
+          <p className="text-sm text-slate-600 mt-1">
             Bảng điều khiển theo dõi tiến độ nộp minh chứng và kết quả đánh giá Công tác Đội
           </p>
         </div>
 
         <Button
           onClick={() => navigate(period?.id ? `/user/criteria?period=${period.id}` : "/user/criteria")}
-          className="gap-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold shrink-0 shadow-md shadow-emerald-900/20 rounded-xl"
+          className="gap-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold shrink-0 shadow-md shadow-emerald-900/20 rounded-xl h-10 px-4"
         >
           <ClipboardList className="h-4 w-4" />
           Vào nộp minh chứng

@@ -20,6 +20,7 @@ import {
   Download,
   Loader2,
   ArrowRight,
+  Building,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getEvidenceSignedUrl } from "@/lib/storage";
@@ -142,8 +143,13 @@ export default function EvidencePage() {
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">
           Kho minh chứng
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Lưu trữ tập trung và quản lý toàn bộ tệp tài liệu, văn bản, báo cáo và đường dẫn tin bài đã tải lên
+        <p className="text-sm text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
+          <span className="font-semibold text-emerald-900 inline-flex items-center gap-1">
+            <Building className="h-4 w-4 text-emerald-700" />
+            Đơn vị: <b className="text-slate-950 font-bold">{profile?.organization?.name || "Liên đội"}</b>
+          </span>
+          <span className="text-slate-300 hidden sm:inline">•</span>
+          <span>Lưu trữ tập trung và quản lý toàn bộ tệp tài liệu, văn bản và đường dẫn tin bài đã nộp</span>
         </p>
       </div>
 

@@ -48,6 +48,7 @@ import {
   Calendar,
   ExternalLink,
   Filter,
+  Building,
   Sparkles,
   Info,
 } from "lucide-react";
@@ -459,9 +460,13 @@ export default function UserBonusPage() {
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-950">
             Đề xuất Điểm thưởng Thi đua
           </h1>
-          <p className="text-sm text-slate-700 mt-1 flex items-center gap-2">
-            <Award className="h-4 w-4 text-emerald-700" />
-            Đăng ký cộng điểm các thành tích, mô hình sáng tạo và giải thưởng phong trào Đội
+          <p className="text-sm text-slate-700 mt-1 flex items-center gap-2 flex-wrap">
+            <span className="font-semibold text-emerald-900 inline-flex items-center gap-1">
+              <Building className="h-4 w-4 text-emerald-700" />
+              Đơn vị: <b className="text-slate-950 font-bold">{profile?.organization?.name || "Liên đội"}</b>
+            </span>
+            <span className="text-slate-300 hidden sm:inline">•</span>
+            <span className="text-slate-600">Đăng ký cộng điểm các thành tích và giải thưởng phong trào Đội</span>
           </p>
         </div>
 

@@ -561,7 +561,7 @@ export default function UserCriteriaPage() {
             </h1>
             <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
               <Building className="h-4 w-4 text-emerald-700" />
-              Đơn vị: <b className="text-slate-800">{profile?.display_name || "Liên đội"}</b>
+              Đơn vị: <b className="text-slate-800">{profile?.organization?.name || profile?.display_name || "Liên đội"}</b>
               <span className="text-slate-300 hidden sm:inline">•</span>
               <span className="text-slate-500">
                 Chọn đợt để xem bộ tiêu chí, tự chấm điểm và nộp minh chứng
@@ -583,7 +583,7 @@ export default function UserCriteriaPage() {
           </div>
 
           <Select value={periodStatusFilter} onValueChange={setPeriodStatusFilter}>
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger className="w-full sm:w-[200px]">
               <SelectValue placeholder="Trạng thái đợt" />
             </SelectTrigger>
             <SelectContent>
@@ -723,13 +723,13 @@ export default function UserCriteriaPage() {
           <span>Danh sách các đợt đánh giá</span>
         </Button>
 
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground hidden sm:inline">Chuyển đợt:</span>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <span className="text-xs text-muted-foreground hidden sm:inline shrink-0">Chuyển đợt:</span>
           <Select
             value={selectedPeriod.id}
             onValueChange={(newId) => setSearchParams({ period: newId })}
           >
-            <SelectTrigger className="w-[280px] h-8 text-xs font-semibold bg-white">
+            <SelectTrigger className="w-full sm:w-[280px] h-8 text-xs font-semibold bg-white">
               <SelectValue placeholder="Chọn đợt khác..." />
             </SelectTrigger>
             <SelectContent>
@@ -770,7 +770,7 @@ export default function UserCriteriaPage() {
           </h1>
           <p className="text-sm text-slate-700 flex items-center gap-1.5 font-medium">
             <Building className="h-4 w-4 text-emerald-700" />
-            Đơn vị: <b className="text-black font-bold">{profile?.display_name || "Liên đội"}</b>
+            Đơn vị: <b className="text-black font-bold">{profile?.organization?.name || profile?.display_name || "Liên đội"}</b>
           </p>
         </div>
 
@@ -840,7 +840,7 @@ export default function UserCriteriaPage() {
           />
         </div>
         <Select value={filterCategory} onValueChange={setFilterCategory}>
-          <SelectTrigger className="w-[200px]">
+          <SelectTrigger className="w-full sm:w-[200px]">
             <SelectValue placeholder="Nhóm tiêu chí" />
           </SelectTrigger>
           <SelectContent>
@@ -853,7 +853,7 @@ export default function UserCriteriaPage() {
           </SelectContent>
         </Select>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-[170px]">
+          <SelectTrigger className="w-full sm:w-[170px]">
             <SelectValue placeholder="Trạng thái" />
           </SelectTrigger>
           <SelectContent>

@@ -161,25 +161,35 @@ export default function UserAccountPage() {
       </div>
 
       {/* User Profile Card */}
-      <Card className="border-slate-200">
+      <Card className="border-emerald-200/90 shadow-2xs bg-gradient-to-r from-emerald-50/50 via-white to-slate-50/50">
         <CardContent className="pt-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <Avatar className="h-16 w-16 bg-emerald-600 text-white text-lg font-bold ring-4 ring-emerald-50 shadow-sm">
+            <Avatar className="h-16 w-16 bg-emerald-700 text-white text-lg font-bold ring-4 ring-emerald-100 shadow-sm shrink-0">
               <AvatarFallback className="bg-emerald-700 text-white font-bold">
-                {profile?.display_name ? profile.display_name.slice(0, 2).toUpperCase() : "LĐ"}
+                {profile?.organization?.name
+                  ? profile.organization.name.replace(/Liên đội|Trường/gi, "").trim().slice(0, 2).toUpperCase()
+                  : profile?.display_name
+                  ? profile.display_name.slice(0, 2).toUpperCase()
+                  : "LĐ"}
               </AvatarFallback>
             </Avatar>
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <h3 className="text-lg font-bold text-slate-900">{profile?.display_name}</h3>
-                <Badge variant="outline" className="text-emerald-700 border-emerald-200 bg-emerald-50">
-                  <Building className="h-3 w-3 mr-1 text-emerald-600" />
-                  Liên đội
-                </Badge>
+            <div className="space-y-1.5 min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-xl font-extrabold text-slate-950">
+                  {profile?.organization?.name || "Liên đội"}
+                </h3>
+                {profile?.organization?.code && (
+                  <Badge variant="outline" className="text-emerald-800 border-emerald-300 bg-emerald-50 font-bold font-mono">
+                    <Building className="h-3 w-3 mr-1 text-emerald-700" />
+                    {profile.organization.code}
+                  </Badge>
+                )}
               </div>
-              <p className="text-xs font-mono text-muted-foreground">
-                Tên đăng nhập: @{profile?.username}
-              </p>
+              <div className="text-sm text-slate-700 flex items-center gap-2 flex-wrap">
+                <span>Người liên hệ / Phụ trách: <b className="text-slate-900 font-bold">{profile?.display_name || "—"}</b></span>
+                <span className="text-slate-300 hidden sm:inline">•</span>
+                <span className="font-mono text-xs text-slate-600">SĐT đăng nhập: @{profile?.username}</span>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -197,16 +207,26 @@ export default function UserAccountPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label className="text-xs">Tên đăng nhập (Cố định)</Label>
-              <Input value={profile?.username || ""} disabled className="mt-1 bg-slate-50 font-mono text-xs" />
+              <Label className="text-xs font-semibold text-slate-700">Đơn vị trực thuộc (Cố định)</Label>
+              <Input
+                value={profile?.organization ? `${profile.organization.name} (${profile.organization.code})` : "Chưa gắn đơn vị"}
+                disabled
+                className="mt-1 bg-slate-100 font-bold text-xs text-slate-900 border-slate-200 cursor-not-allowed"
+              />
             </div>
 
             <div>
-              <Label className="text-xs">Họ và tên hiển thị *</Label>
+              <Label className="text-xs font-semibold text-slate-700">Tên đăng nhập (Số điện thoại)</Label>
+              <Input value={profile?.username || ""} disabled className="mt-1 bg-slate-100 font-mono text-xs text-slate-900 border-slate-200 cursor-not-allowed" />
+            </div>
+
+            <div>
+              <Label className="text-xs font-semibold text-slate-700">Họ và tên người phụ trách *</Label>
               <Input
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="mt-1"
+                placeholder="Nhập họ và tên người phụ trách"
+                className="mt-1 font-medium"
               />
             </div>
 

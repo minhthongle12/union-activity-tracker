@@ -169,14 +169,14 @@ export default function NotificationsPage() {
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <h4 className="font-semibold text-sm sm:text-base text-slate-900">
-                    Thông báo đẩy trên trình duyệt (Web Push Notification)
+                    Thông báo đẩy trên trình duyệt 
                   </h4>
                   <Badge variant="outline" className="text-[10px] font-mono bg-emerald-100/80 text-emerald-800 border-emerald-300">
                     VAPID RFC 8292
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Nhận thông báo ngay lập tức ngay cả khi không mở tab hệ thống (thông qua Service Worker máy khách)
+                  Nhận thông báo ngay lập tức ngay cả khi không mở tab hệ thống 
                 </p>
               </div>
             </div>

@@ -43,7 +43,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-gradient-to-br from-emerald-50 via-[#f4faf5] to-lime-50/60 px-4 py-6 sm:py-10 relative overflow-hidden text-slate-900">
+    <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-gradient-to-br from-emerald-50 via-[#f4faf5] to-lime-50/60 px-4 py-6 sm:py-10 pt-[calc(1.5rem+env(safe-area-inset-top,0px))] pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] relative overflow-hidden text-slate-900">
       {/* Decorative background glow */}
       <div className="absolute -top-32 -left-32 w-80 sm:w-96 h-80 sm:h-96 rounded-full bg-emerald-200/40 blur-3xl pointer-events-none" />
       <div className="absolute -bottom-32 -right-32 w-80 sm:w-96 h-80 sm:h-96 rounded-full bg-lime-200/40 blur-3xl pointer-events-none" />

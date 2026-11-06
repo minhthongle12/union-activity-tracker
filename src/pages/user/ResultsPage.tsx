@@ -179,7 +179,7 @@ export default function UserResultsPage() {
           </h1>
           <p className="text-sm text-slate-700 mt-1 flex items-center gap-2">
             <Building className="h-4 w-4 text-emerald-700" />
-            Đơn vị: <b className="text-black font-bold">{profile?.display_name || "Liên đội"}</b>
+            Đơn vị: <b className="text-black font-bold">{profile?.organization?.name || profile?.display_name || "Liên đội"}</b>
           </p>
         </div>
 

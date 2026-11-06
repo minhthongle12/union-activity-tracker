@@ -72,6 +72,7 @@ export interface Profile {
   display_name: string;
   role: UserRole;
   organization_id: string | null;
+  organization?: Organization | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;

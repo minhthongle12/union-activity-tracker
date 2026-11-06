@@ -94,12 +94,12 @@ export function AdminLayout() {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 bg-gradient-to-b from-[#0e351f] via-[#0a2918] to-[#071f12] text-emerald-100 flex flex-col transition-transform duration-200 ease-in-out md:static md:translate-x-0 shadow-xl border-r border-emerald-900/40",
+          "fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-gradient-to-b from-[#0e351f] via-[#0a2918] to-[#071f12] text-emerald-100 flex flex-col transition-transform duration-200 ease-in-out md:static md:translate-x-0 shadow-xl border-r border-emerald-900/40 pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         {/* Brand header */}
-        <div className="h-16 px-4 flex items-center justify-between border-b border-emerald-900/60 bg-[#072012]/80 backdrop-blur-sm">
+        <div className="h-16 px-4 flex items-center justify-between border-b border-emerald-900/60 bg-[#072012]/80 backdrop-blur-sm shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="h-10 w-10 rounded-xl bg-white/95 p-1 flex items-center justify-center shrink-0 shadow-sm ring-1 ring-emerald-500/30">
               <img
@@ -163,7 +163,7 @@ export function AdminLayout() {
         </div>
 
         {/* Sidebar footer user badge */}
-        <div className="p-3 border-t border-emerald-900/60 bg-[#072012]/60">
+        <div className="p-3 border-t border-emerald-900/60 bg-[#072012]/60 shrink-0">
           <div className="flex items-center gap-2">
             <Avatar className="h-8 w-8 border border-emerald-600/50 bg-emerald-800 text-white">
               <AvatarFallback className="bg-emerald-700 text-xs font-semibold text-emerald-100">
@@ -193,21 +193,22 @@ export function AdminLayout() {
 
       {/* Main content wrapper */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top Navbar */}
-        <header className="h-16 bg-white/90 backdrop-blur-md border-b border-emerald-100 px-4 md:px-6 flex items-center justify-between sticky top-0 z-30 shadow-2xs">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="md:hidden text-emerald-900 hover:bg-emerald-50"
-              onClick={() => setSidebarOpen(true)}
-            >
-              <Menu className="h-5 w-5" />
-            </Button>
-            <Breadcrumbs />
-          </div>
+        {/* Top Navbar - Safe area padded for iOS notch / Dynamic Island */}
+        <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-emerald-100 shadow-2xs pt-[env(safe-area-inset-top,0px)]">
+          <div className="h-14 sm:h-16 px-3 sm:px-4 md:px-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="md:hidden text-emerald-900 hover:bg-emerald-50 h-9 w-9"
+                onClick={() => setSidebarOpen(true)}
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
+              <Breadcrumbs />
+            </div>
 
-          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3">
             <NavLink to="/admin/notifications">
               <Button variant="ghost" size="icon" className="relative text-slate-700 hover:text-emerald-800 hover:bg-emerald-50 rounded-xl">
                 <Bell className="h-5 w-5" />
@@ -250,15 +251,16 @@ export function AdminLayout() {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+          </div>
         </header>
 
         {/* Page body */}
-        <main className="flex-1 p-3 sm:p-4 md:p-6 lg:p-8 max-w-7xl w-full mx-auto pb-24 md:pb-8">
+        <main className="flex-1 p-3 sm:p-4 md:p-6 lg:p-8 max-w-7xl w-full mx-auto pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-8">
           <Outlet />
         </main>
 
-        {/* Mobile Bottom Navigation Bar (Admin PWA Style) */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-emerald-100 flex items-center justify-around px-2 py-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-lg">
+        {/* Mobile Bottom Navigation Bar (Admin PWA Style - iOS Safe) */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-emerald-100 flex items-center justify-around px-1 py-1 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pl-[max(0.5rem,env(safe-area-inset-left,0px))] pr-[max(0.5rem,env(safe-area-inset-right,0px))] shadow-lg">
           <NavLink
             to="/admin"
             end
