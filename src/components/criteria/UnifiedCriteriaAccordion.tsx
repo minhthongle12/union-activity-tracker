@@ -48,6 +48,11 @@ import {
 import { useGlobalLoading } from "@/contexts/LoadingContext";
 import { useAuth } from "@/hooks/useAuth";
 import { EvidencePreviewModal } from "./EvidencePreviewModal";
+import {
+  optimizeImageFile,
+  isCompressibleImage,
+  formatBytes,
+} from "@/lib/imageOptimizer";
 
 export interface CriterionWithSubmission {
   criterion: PeriodCriterion;
@@ -168,20 +173,47 @@ export function UnifiedCriteriaAccordion({
     if (link3Count > 0) fulfilledReqTypes++;
   }
 
-  // File upload handler
+  // File upload handler (với tự động nén & tối ưu ảnh)
   const handleFileUpload = async (type: EvidenceType, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const rawFile = e.target.files?.[0];
+    if (!rawFile) return;
 
-    const validation = validateEvidenceFile(file);
-    if (!validation.valid) {
-      toast.error(validation.error);
+    // 1. Kiểm tra định dạng sơ bộ
+    const initialValidation = validateEvidenceFile(rawFile);
+    if (!initialValidation.valid) {
+      toast.error(initialValidation.error);
       return;
+    }
+
+    let fileToUpload = rawFile;
+
+    // 2. Tối ưu nén dung lượng hình ảnh nếu là ảnh raster (JPG, PNG, WEBP,...)
+    if (isCompressibleImage(rawFile)) {
+      try {
+        await withLoading(async () => {
+          const optResult = await optimizeImageFile(rawFile, {
+            maxWidth: 1920,
+            maxHeight: 1920,
+            quality: 0.82,
+            outputType: "image/jpeg",
+          });
+
+          if (optResult.wasCompressed) {
+            fileToUpload = optResult.file;
+            toast.info(
+              `Đã tối ưu dung lượng ảnh: ${formatBytes(optResult.originalSize)} ➔ ${formatBytes(optResult.optimizedSize)} (tiết kiệm ${optResult.savingsPercent}%)`
+            );
+          }
+        }, "Đang tối ưu dung lượng hình ảnh...");
+      } catch (err) {
+        console.warn("Không thể tối ưu ảnh, dùng ảnh gốc:", err);
+        fileToUpload = rawFile;
+      }
     }
 
     const tempId = "temp-" + Date.now();
     // Cache local object URL for instant preview (even if offline or before save)
-    const localBlobUrl = URL.createObjectURL(file);
+    const localBlobUrl = URL.createObjectURL(fileToUpload);
     blobCacheRef.current.set(tempId, localBlobUrl);
 
     let storagePath: string | null = null;
@@ -194,30 +226,30 @@ export function UnifiedCriteriaAccordion({
           periodId: criterion.period_id,
           entityId: submission?.id || criterion.id,
           revisionId: currentRevision?.id || "rev1",
-          file,
+          file: fileToUpload,
         });
         storagePath = res.path;
-      }, `Đang tải tệp "${file.name}" lên máy chủ...`);
+      }, `Đang tải tệp "${fileToUpload.name}" lên máy chủ...`);
     } catch (err) {
       console.warn("Storage upload warning, using local path:", err);
-      storagePath = `${orgId}/${criterion.period_id}/${criterion.id}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+      storagePath = `${orgId}/${criterion.period_id}/${criterion.id}/${Date.now()}_${fileToUpload.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
     }
 
     const newItem: EvidenceItem = {
       id: tempId,
       revision_id: currentRevision?.id || "temp-rev",
       evidence_type: type,
-      file_name: file.name,
+      file_name: fileToUpload.name,
       storage_path: storagePath,
       external_url: null,
-      mime_type: file.type || "application/octet-stream",
-      file_size: file.size,
+      mime_type: fileToUpload.type || "application/octet-stream",
+      file_size: fileToUpload.size,
       uploaded_by: profile?.id || null,
       created_at: new Date().toISOString(),
     };
 
     setLocalEvidence((prev) => [...prev, newItem]);
-    toast.success(`Đã thêm tệp "${file.name}"`);
+    toast.success(`Đã thêm tệp "${fileToUpload.name}"`);
     e.target.value = "";
   };
 
