@@ -1323,6 +1323,39 @@ function AdminUnitGradingDetail({
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
 
+  // Check if unit submitted a re-evaluation request for this submission
+  const [reevalRequest, setReevalRequest] = useState<{
+    id: string;
+    title: string;
+    message: string;
+    created_at: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!unit.submission?.id) {
+      setReevalRequest(null);
+      return;
+    }
+
+    let isMounted = true;
+    supabase
+      .from("notifications")
+      .select("id, title, message, created_at")
+      .eq("type", "reevaluation_requested")
+      .eq("related_id", unit.submission.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .then(({ data, error }) => {
+        if (!error && data && data.length > 0 && isMounted) {
+          setReevalRequest(data[0]);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [unit.submission?.id]);
+
   // Open / View signed URL
   const handleViewFile = async (evItem: EvidenceItem) => {
     setPreviewItem(evItem);
@@ -1398,6 +1431,25 @@ function AdminUnitGradingDetail({
             </div>
           </div>
         </div>
+
+        {/* Re-evaluation Request from Unit Alert */}
+        {reevalRequest && (
+          <div className="p-3.5 bg-amber-50 rounded-xl border border-amber-300 text-xs text-amber-900 space-y-2 shadow-2xs">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-bold flex items-center gap-1.5 text-amber-900 text-xs sm:text-sm">
+                <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+                Liên đội yêu cầu thẩm định lại tiêu chí
+              </span>
+              <span className="text-[10px] text-amber-700 font-medium shrink-0">
+                {new Date(reevalRequest.created_at).toLocaleDateString("vi-VN")}
+              </span>
+            </div>
+
+            <div className="text-slate-800 bg-white/90 p-2.5 rounded-lg border border-amber-200/80 leading-relaxed text-xs">
+              {reevalRequest.message}
+            </div>
+          </div>
+        )}
 
         {/* Admin Final Grading Form */}
         <div className="pt-3 border-t border-slate-200 space-y-3 bg-emerald-50/40 border-emerald-100 p-3.5 rounded-xl">

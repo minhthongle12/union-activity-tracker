@@ -5,6 +5,7 @@ import {
 } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { ProtectedRoute } from '@/components/common/ProtectedRoute';
+import { RouteErrorBoundary } from '@/components/common/RouteErrorBoundary';
 import AdminLayout from '@/components/layout/AdminLayout';
 import UserLayout from '@/components/layout/UserLayout';
 
@@ -24,7 +25,31 @@ function PageLoading() {
 }
 
 function lazyPage(importFn: () => Promise<{ default: React.ComponentType }>) {
-  const Component = lazy(importFn);
+  const Component = lazy(async () => {
+    try {
+      return await importFn();
+    } catch (error: any) {
+      const msg = error?.message || '';
+      const isDynamicImportError =
+        msg.includes('Failed to fetch dynamically imported module') ||
+        msg.includes('error loading dynamically imported module') ||
+        msg.includes('Importing a module script failed') ||
+        error?.name === 'ChunkLoadError';
+
+      if (isDynamicImportError) {
+        const lastReload = sessionStorage.getItem('chunk_reload_timestamp');
+        const now = Date.now();
+        // Auto reload if not reloaded within last 10s to get new build chunks
+        if (!lastReload || now - parseInt(lastReload, 10) > 10000) {
+          sessionStorage.setItem('chunk_reload_timestamp', now.toString());
+          window.location.reload();
+          return new Promise<{ default: React.ComponentType }>(() => {});
+        }
+      }
+      throw error;
+    }
+  });
+
   return (
     <Suspense fallback={<PageLoading />}>
       <Component />
@@ -72,6 +97,7 @@ const routes: RouteObject[] = [
   {
     path: '/login',
     element: <LoginPage />,
+    errorElement: <RouteErrorBoundary />,
   },
 
   // ── Admin routes ──
@@ -82,6 +108,7 @@ const routes: RouteObject[] = [
         <AdminLayout />
       </ProtectedRoute>
     ),
+    errorElement: <RouteErrorBoundary />,
     children: [
       { index: true, element: <AdminDashboard /> },
       { path: 'organizations', element: <AdminOrganizations /> },
@@ -106,6 +133,7 @@ const routes: RouteObject[] = [
         <UserLayout />
       </ProtectedRoute>
     ),
+    errorElement: <RouteErrorBoundary />,
     children: [
       { index: true, element: <UserDashboard /> },
       { path: 'criteria', element: <UserCriteria /> },
@@ -121,6 +149,7 @@ const routes: RouteObject[] = [
   {
     path: '/',
     element: <RootRedirect />,
+    errorElement: <RouteErrorBoundary />,
   },
 
   // ── Catch-all ──

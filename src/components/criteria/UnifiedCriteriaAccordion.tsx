@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 import {
   validateEvidenceFile,
   uploadEvidenceFile,
@@ -53,6 +54,8 @@ import {
   isCompressibleImage,
   formatBytes,
 } from "@/lib/imageOptimizer";
+import { notifyAdmins } from "@/lib/notificationService";
+import { recordAuditLog } from "@/lib/auditLog";
 
 export interface CriterionWithSubmission {
   criterion: PeriodCriterion;
@@ -70,6 +73,7 @@ interface UnifiedCriteriaAccordionProps {
   onAdminVerify?: (submissionId: string, officialScore: number, comment: string) => Promise<void>;
   onAdminRequestRevision?: (submissionId: string, comment: string) => Promise<void>;
   onAdminReopen?: (submissionId: string, reason: string) => Promise<void>;
+  onRequestReevaluation?: (criterionId: string, submissionId: string, reason?: string) => Promise<void>;
 }
 
 export function UnifiedCriteriaAccordion({
@@ -80,6 +84,7 @@ export function UnifiedCriteriaAccordion({
   onAdminVerify,
   onAdminRequestRevision,
   onAdminReopen,
+  onRequestReevaluation,
 }: UnifiedCriteriaAccordionProps) {
   const { criterion, submission, currentRevision, evidenceItems = [], reviewActions = [] } = item;
   const [isOpen, setIsOpen] = useState(false);
@@ -118,6 +123,23 @@ export function UnifiedCriteriaAccordion({
   const [reopenDialogOpen, setReopenDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Re-evaluation request state (User requesting re-evaluation -> switches to "submitted")
+  const [reevaluationDialogOpen, setReevaluationDialogOpen] = useState(false);
+  const [isSendingReeval, setIsSendingReeval] = useState(false);
+
+  // Local submission status & score for instantaneous UI update
+  const [localStatus, setLocalStatus] = useState<SubmissionStatus>(submission?.status || "draft");
+  const [localAdminScore, setLocalAdminScore] = useState<number | null | undefined>(submission?.admin_score);
+
+  useEffect(() => {
+    setLocalStatus(submission?.status || "draft");
+    setLocalAdminScore(submission?.admin_score);
+  }, [submission?.status, submission?.admin_score]);
+
+  const status: SubmissionStatus = localStatus;
+  const isEditableUser = mode === "user" && status !== "verified";
+  const isVerified = status === "verified";
+
   // Sync internal state when item props change (e.g. after refetch)
   useEffect(() => {
     if (currentRevision?.self_score !== undefined && currentRevision?.self_score !== null) {
@@ -138,10 +160,6 @@ export function UnifiedCriteriaAccordion({
   useEffect(() => {
     setLocalEvidence(evidenceItems);
   }, [evidenceItems]);
-
-  const status: SubmissionStatus = submission?.status || "draft";
-  const isEditableUser = mode === "user" && status !== "verified";
-  const isVerified = status === "verified";
 
   // Calculate required evidence counts
   const hasDoc1 = !!criterion.req_doc1;
@@ -342,6 +360,78 @@ export function UnifiedCriteriaAccordion({
     setLinkType(type);
     setLinkRows([{ id: Date.now().toString(), title: "", url: "" }]);
     setLinkDialogOpen(true);
+  };
+
+  // Send re-evaluation request to Admin and switch status directly to "submitted" (Chờ thẩm định)
+  const handleSendReevaluationRequest = async () => {
+    setIsSendingReeval(true);
+    try {
+      const orgName = profile?.organization?.name || profile?.display_name || "Liên đội";
+      const critCode = criterion.code_snapshot || "";
+      const critTitle = criterion.title_snapshot || "";
+      const previousScore = localAdminScore ?? submission?.admin_score ?? 0;
+
+      // 1. Update status directly to 'submitted' in Supabase to unlock criterion
+      if (submission?.id) {
+        const { error: updErr } = await supabase
+          .from("submissions")
+          .update({
+            status: "submitted",
+            admin_score: null,
+            verified_by: null,
+            verified_at: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", submission.id);
+
+        if (updErr) {
+          console.error("Lỗi khi mở lại tiêu chí:", updErr);
+          toast.error("Không thể mở lại tiêu chí: " + updErr.message);
+          return;
+        }
+      }
+
+      // 2. Notify all admins (In-app + Push)
+      await notifyAdmins({
+        title: `Yêu cầu thẩm định lại: [${critCode}] - ${orgName}`,
+        message: `Liên đội ${orgName} gửi yêu cầu thẩm định lại tiêu chí "${critTitle}" (Điểm xác thực trước: ${previousScore}đ) để bổ sung minh chứng.`,
+        type: "reevaluation_requested",
+        relatedId: submission?.id || null,
+        url: "/admin/review",
+      });
+
+      // 3. Record audit log
+      await recordAuditLog({
+        actorId: profile?.id,
+        action: "REQUEST_REEVALUATION",
+        entityType: "submission",
+        entityId: submission?.id || null,
+        summary: `Liên đội ${orgName} yêu cầu thẩm định lại tiêu chí [${critCode}]`,
+        details: {
+          criterionId: criterion.id,
+          criterionCode: critCode,
+          previousScore,
+          organizationId: profile?.organization_id,
+        },
+      });
+
+      // 4. Update local state immediately (unlocks accordion)
+      setLocalStatus("submitted");
+      setLocalAdminScore(null);
+      setReevaluationDialogOpen(false);
+
+      // 5. Notify parent callback if provided
+      if (onRequestReevaluation && submission?.id) {
+        await onRequestReevaluation(criterion.id, submission.id);
+      }
+
+      toast.success("Đã mở lại tiêu chí! Bạn có thể tải thêm minh chứng ngay bây giờ.");
+    } catch (err) {
+      console.error("Error sending re-evaluation request:", err);
+      toast.error("Có lỗi xảy ra khi gửi yêu cầu. Vui lòng thử lại!");
+    } finally {
+      setIsSendingReeval(false);
+    }
   };
 
   // Remove evidence
@@ -807,9 +897,35 @@ export function UnifiedCriteriaAccordion({
               )}
 
               {mode === "user" && isVerified && (
-                <div className="pt-3 border-t text-xs text-emerald-700 font-medium flex items-center gap-1.5 bg-emerald-50/70 p-2.5 rounded-lg border border-emerald-100">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-                  <span>Tiêu chí đã được Hội đồng xác thực ({submission?.admin_score}đ). Hồ sơ đã khóa chỉnh sửa.</span>
+                <div className="pt-3 border-t text-xs text-emerald-800 font-medium flex flex-col sm:flex-row sm:items-center justify-between bg-emerald-50/80 p-3 rounded-lg border border-emerald-200 gap-2.5">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                    <span>
+                      Tiêu chí đã được Hội đồng xác thực ({localAdminScore ?? submission?.admin_score}đ / {criterion.max_score_snapshot}đ). Hồ sơ đã khóa chỉnh sửa.
+                    </span>
+                  </div>
+
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setReevaluationDialogOpen(true);
+                    }}
+                    className="text-xs font-semibold text-amber-900 bg-amber-50 hover:bg-amber-100 border-amber-300 gap-1.5 cursor-pointer shrink-0"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5 text-amber-700" />
+                    Yêu cầu thẩm định lại
+                  </Button>
+                </div>
+              )}
+
+              {mode === "user" && status === "submitted" && (
+                <div className="pt-2 text-xs text-lime-900 font-medium flex items-center gap-1.5 bg-lime-50/80 p-2.5 rounded-lg border border-lime-200">
+                  <Clock className="h-4 w-4 shrink-0 text-lime-700" />
+                  <span>
+                    Tiêu chí đang ở trạng thái <strong>Chờ thẩm định</strong>. Bạn có thể tải thêm minh chứng và bấm <strong>Lưu cập nhật minh chứng</strong> bên dưới.
+                  </span>
                 </div>
               )}
             </div>
@@ -1033,6 +1149,38 @@ export function UnifiedCriteriaAccordion({
               }}
             >
               Xác nhận mở lại
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ============================================================ */}
+      {/* DIALOG: USER REQUEST RE-EVALUATION (YÊU CẦU THẨM ĐỊNH LẠI) */}
+      {/* ============================================================ */}
+      <Dialog open={reevaluationDialogOpen} onOpenChange={setReevaluationDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg flex items-center gap-2 text-slate-800">
+              <RotateCcw className="h-4 w-4 text-amber-600" />
+              Yêu cầu thẩm định lại tiêu chí [{criterion.code_snapshot || ""}]
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-600 leading-relaxed pt-1.5">
+              Bạn có chắc chắn muốn mở lại tiêu chí này không? Tiêu chí sẽ được chuyển về trạng thái <strong>Chờ thẩm định</strong> để Liên đội có thể trực tiếp bổ sung thêm minh chứng và chỉnh sửa điểm tự chấm.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="pt-3 border-t flex items-center justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => setReevaluationDialogOpen(false)}>
+              Hủy
+            </Button>
+            <Button
+              size="sm"
+              disabled={isSendingReeval}
+              onClick={handleSendReevaluationRequest}
+              className="bg-amber-600 hover:bg-amber-700 text-white text-xs gap-1.5 cursor-pointer font-medium"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              {isSendingReeval ? "Đang xử lý..." : "Xác nhận & Mở lại tiêu chí"}
             </Button>
           </DialogFooter>
         </DialogContent>

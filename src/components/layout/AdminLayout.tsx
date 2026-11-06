@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import {
   LayoutDashboard,
@@ -19,11 +19,13 @@ import {
   X,
   LogOut,
   ShieldCheck,
+  RotateCw,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,6 +58,20 @@ export function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { profile, logout } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [isReloading, setIsReloading] = useState(false);
+
+  const handleGlobalReload = async () => {
+    setIsReloading(true);
+    try {
+      await queryClient.invalidateQueries();
+      toast.success("Đã cập nhật dữ liệu mới nhất!");
+    } catch {
+      toast.error("Không thể làm mới dữ liệu. Vui lòng thử lại!");
+    } finally {
+      setTimeout(() => setIsReloading(false), 500);
+    }
+  };
 
   // Listen to realtime notifications
   useRealtimeNotifications();
@@ -216,8 +232,20 @@ export function AdminLayout() {
               <Breadcrumbs />
             </div>
 
-            <div className="flex items-center gap-3">
-            <NavLink to="/admin/notifications">
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* Reload Button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleGlobalReload}
+                disabled={isReloading}
+                title="Làm mới dữ liệu mới nhất từ máy chủ"
+                className="relative text-slate-700 hover:text-emerald-800 hover:bg-emerald-50 rounded-xl h-9 w-9 cursor-pointer"
+              >
+                <RotateCw className={cn("h-4 w-4 text-emerald-800 transition-all", isReloading && "animate-spin text-emerald-600")} />
+              </Button>
+
+              <NavLink to="/admin/notifications">
               <Button variant="ghost" size="icon" className="relative text-slate-700 hover:text-emerald-800 hover:bg-emerald-50 rounded-xl">
                 <Bell className="h-5 w-5" />
                 {(unreadCount ?? 0) > 0 && (

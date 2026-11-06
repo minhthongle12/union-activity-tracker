@@ -28,6 +28,18 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 );
 
+// Handle Vite chunk preload errors when a new build is deployed
+if (typeof window !== 'undefined') {
+  window.addEventListener('vite:preloadError', () => {
+    const lastReload = sessionStorage.getItem('vite_preload_error_reload');
+    const now = Date.now();
+    if (!lastReload || now - parseInt(lastReload, 10) > 10000) {
+      sessionStorage.setItem('vite_preload_error_reload', now.toString());
+      window.location.reload();
+    }
+  });
+}
+
 // Register PWA Service Worker
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {

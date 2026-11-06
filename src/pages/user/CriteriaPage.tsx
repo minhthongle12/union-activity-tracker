@@ -42,6 +42,7 @@ import {
   Clock,
   Sparkles,
   FileSpreadsheet,
+  RotateCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -177,6 +178,7 @@ export default function UserCriteriaPage() {
 
   // Filter inside Periods Overview
   const [periodSearch, setPeriodSearch] = useState("");
+  const [isRefetchingManual, setIsRefetchingManual] = useState(false);
   const [periodStatusFilter, setPeriodStatusFilter] = useState("all");
   const [isExporting, setIsExporting] = useState(false);
 
@@ -774,13 +776,40 @@ export default function UserCriteriaPage() {
           </p>
         </div>
 
-        {/* Nút Xuất Excel báo cáo của đơn vị */}
+        {/* Thao tác: Tải lại dữ liệu + Xuất Excel */}
         <div className="flex items-center gap-2 shrink-0">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={async () => {
+              setIsRefetchingManual(true);
+              try {
+                await Promise.all([
+                  refetchSubmissions(),
+                  queryClient.invalidateQueries({ queryKey: ["user_periods"] }),
+                  queryClient.invalidateQueries({ queryKey: ["user_criteria"] }),
+                  queryClient.invalidateQueries({ queryKey: ["user_categories"] }),
+                ]);
+                toast.success("Đã cập nhật dữ liệu mới nhất!");
+              } catch {
+                toast.error("Không thể làm mới dữ liệu.");
+              } finally {
+                setTimeout(() => setIsRefetchingManual(false), 500);
+              }
+            }}
+            disabled={isRefetchingManual}
+            title="Lấy dữ liệu mới nhất từ máy chủ"
+            className="border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold text-xs gap-1.5 h-9 px-3 cursor-pointer shadow-2xs"
+          >
+            <RotateCw className={cn("h-3.5 w-3.5 text-emerald-800 transition-all", isRefetchingManual && "animate-spin text-emerald-600")} />
+            <span className="hidden sm:inline">{isRefetchingManual ? "Đang tải..." : "Tải lại dữ liệu"}</span>
+          </Button>
+
           <Button
             size="sm"
             onClick={handleExportExcel}
             disabled={isExporting}
-            className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs gap-1.5 shadow-sm h-9 px-3.5"
+            className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs gap-1.5 shadow-sm h-9 px-3.5 cursor-pointer"
           >
             {isExporting ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -904,6 +933,9 @@ export default function UserCriteriaPage() {
               mode="user"
               onSaveDraft={handleSaveDraft}
               onSubmit={handleSubmitCriterion}
+              onRequestReevaluation={async () => {
+                await refetchSubmissions();
+              }}
             />
           ))
         )}
