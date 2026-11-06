@@ -35,6 +35,8 @@ import {
   Save,
   Clock,
   Plus,
+  Eye,
+  ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -44,6 +46,8 @@ import {
   getEvidenceSignedUrl,
 } from "@/lib/storage";
 import { useGlobalLoading } from "@/contexts/LoadingContext";
+import { useAuth } from "@/hooks/useAuth";
+import { EvidencePreviewModal } from "./EvidencePreviewModal";
 
 export interface CriterionWithSubmission {
   criterion: PeriodCriterion;
@@ -80,18 +84,25 @@ export function UnifiedCriteriaAccordion({
     currentRevision?.self_score ?? criterion.max_score_snapshot ?? 0
   );
   const { withLoading } = useGlobalLoading();
+  const { profile } = useAuth();
+  const blobCacheRef = useRef<Map<string, string>>(new Map());
+
+  // Evidence preview modal state
+  const [previewItem, setPreviewItem] = useState<EvidenceItem | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
 
   // Local evidence list
   const [localEvidence, setLocalEvidence] = useState<EvidenceItem[]>(evidenceItems);
 
-  // Add Link dialog state (supports multiple links & bulk paste)
+  // Add Link dialog state (simplified: direct link inputs with optional title)
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkType, setLinkType] = useState<EvidenceType>("link3");
   const [linkRows, setLinkRows] = useState<{ id: string; title: string; url: string }[]>([
     { id: "1", title: "", url: "" },
   ]);
-  const [bulkText, setBulkText] = useState("");
-  const [inputTab, setInputTab] = useState<"rows" | "bulk">("rows");
 
   // Admin evaluation state
   const [adminScore, setAdminScore] = useState<number>(
@@ -168,25 +179,32 @@ export function UnifiedCriteriaAccordion({
       return;
     }
 
+    const tempId = "temp-" + Date.now();
+    // Cache local object URL for instant preview (even if offline or before save)
+    const localBlobUrl = URL.createObjectURL(file);
+    blobCacheRef.current.set(tempId, localBlobUrl);
+
     let storagePath: string | null = null;
+    const orgId = profile?.organization_id || "public";
     try {
       await withLoading(async () => {
         const res = await uploadEvidenceFile({
           bucket: "evidence",
-          orgId: "org",
+          orgId: orgId,
           periodId: criterion.period_id,
           entityId: submission?.id || criterion.id,
-          revisionId: currentRevision?.id,
+          revisionId: currentRevision?.id || "rev1",
           file,
         });
         storagePath = res.path;
       }, `Đang tải tệp "${file.name}" lên máy chủ...`);
-    } catch {
-      storagePath = `evidence/${criterion.id}/${file.name}`;
+    } catch (err) {
+      console.warn("Storage upload warning, using local path:", err);
+      storagePath = `${orgId}/${criterion.period_id}/${criterion.id}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
     }
 
     const newItem: EvidenceItem = {
-      id: "temp-" + Date.now(),
+      id: tempId,
       revision_id: currentRevision?.id || "temp-rev",
       evidence_type: type,
       file_name: file.name,
@@ -194,7 +212,7 @@ export function UnifiedCriteriaAccordion({
       external_url: null,
       mime_type: file.type || "application/octet-stream",
       file_size: file.size,
-      uploaded_by: null,
+      uploaded_by: profile?.id || null,
       created_at: new Date().toISOString(),
     };
 
@@ -205,55 +223,62 @@ export function UnifiedCriteriaAccordion({
 
   // View / Open file
   const handleViewFile = async (evItem: EvidenceItem) => {
-    if (evItem.external_url) {
-      window.open(evItem.external_url, "_blank");
+    setPreviewItem(evItem);
+    setPreviewError(null);
+    setPreviewModalOpen(true);
+
+    // 1. Check local blob cache first (instant preview for newly added files)
+    const cachedBlob = blobCacheRef.current.get(evItem.id);
+    if (cachedBlob) {
+      setPreviewUrl(cachedBlob);
+      setPreviewLoading(false);
       return;
     }
+
+    // 2. Check external URL
+    if (evItem.external_url) {
+      setPreviewUrl(evItem.external_url);
+      setPreviewLoading(false);
+      return;
+    }
+
+    // 3. Storage path: request signed URL
     if (evItem.storage_path) {
+      setPreviewLoading(true);
       try {
         const signedUrl = await getEvidenceSignedUrl("evidence", evItem.storage_path);
-        window.open(signedUrl, "_blank");
-      } catch {
-        toast.info(`Tệp minh chứng: ${evItem.file_name}`);
+        setPreviewUrl(signedUrl);
+      } catch (err) {
+        console.error("Signed URL error:", err);
+        setPreviewError(
+          "Tệp chưa được đồng bộ hoặc phiên truy cập đã hết hạn. Nếu vừa tải tệp từ máy tính, bạn vẫn có thể xem lại sau khi lưu bài."
+        );
+        setPreviewUrl(null);
+      } finally {
+        setPreviewLoading(false);
       }
     } else {
-      toast.info(`Tệp minh chứng: ${evItem.file_name}`);
+      setPreviewLoading(false);
+      setPreviewUrl(null);
     }
   };
 
-  // Add Multiple Links (Rows or Bulk paste)
+  // Add Links (simplified & minimal)
   const handleAddMultipleLinks = () => {
     const toAdd: { title: string; url: string }[] = [];
 
-    if (inputTab === "rows") {
-      for (const row of linkRows) {
-        const trimmedUrl = row.url.trim();
-        if (!trimmedUrl) continue;
-        try {
-          new URL(trimmedUrl);
-          toAdd.push({
-            title: row.title.trim() || trimmedUrl,
-            url: trimmedUrl,
-          });
-        } catch {
-          toast.error(`Đường dẫn không hợp lệ: "${trimmedUrl}" (phải bắt đầu bằng http:// hoặc https://)`);
-          return;
-        }
-      }
-    } else {
-      // Bulk paste mode
-      const lines = bulkText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-      for (const line of lines) {
-        try {
-          new URL(line);
-          toAdd.push({
-            title: line,
-            url: line,
-          });
-        } catch {
-          toast.error(`Đường dẫn không hợp lệ trong danh sách: "${line}"`);
-          return;
-        }
+    for (const row of linkRows) {
+      const trimmedUrl = row.url.trim();
+      if (!trimmedUrl) continue;
+      try {
+        new URL(trimmedUrl);
+        toAdd.push({
+          title: row.title.trim() || trimmedUrl,
+          url: trimmedUrl,
+        });
+      } catch {
+        toast.error(`Đường dẫn không hợp lệ: "${trimmedUrl}" (phải bắt đầu bằng http:// hoặc https://)`);
+        return;
       }
     }
 
@@ -277,7 +302,6 @@ export function UnifiedCriteriaAccordion({
 
     setLocalEvidence((prev) => [...prev, ...newItems]);
     setLinkRows([{ id: Date.now().toString(), title: "", url: "" }]);
-    setBulkText("");
     setLinkDialogOpen(false);
     toast.success(`Đã thêm ${newItems.length} liên kết minh chứng!`);
   };
@@ -285,8 +309,6 @@ export function UnifiedCriteriaAccordion({
   const openLinkDialogForType = (type: EvidenceType) => {
     setLinkType(type);
     setLinkRows([{ id: Date.now().toString(), title: "", url: "" }]);
-    setBulkText("");
-    setInputTab("rows");
     setLinkDialogOpen(true);
   };
 
@@ -298,7 +320,7 @@ export function UnifiedCriteriaAccordion({
 
   // Format date helper
   const formatDeadline = (dl: string | null | undefined) => {
-    if (!dl) return "00:00 11/1/26";
+    if (!dl) return "Theo thông báo";
     try {
       const d = new Date(dl);
       if (isNaN(d.getTime())) return dl;
@@ -800,6 +822,7 @@ export function UnifiedCriteriaAccordion({
                       onOpenAddLink={() => openLinkDialogForType("doc1")}
                       onRemove={handleRemoveEvidence}
                       onViewFile={handleViewFile}
+                      getBlobUrl={(id) => blobCacheRef.current.get(id)}
                     />
                   )}
 
@@ -816,6 +839,7 @@ export function UnifiedCriteriaAccordion({
                       onOpenAddLink={() => openLinkDialogForType("doc2")}
                       onRemove={handleRemoveEvidence}
                       onViewFile={handleViewFile}
+                      getBlobUrl={(id) => blobCacheRef.current.get(id)}
                     />
                   )}
 
@@ -832,6 +856,7 @@ export function UnifiedCriteriaAccordion({
                       onOpenAddLink={() => openLinkDialogForType("link3")}
                       onRemove={handleRemoveEvidence}
                       onViewFile={handleViewFile}
+                      getBlobUrl={(id) => blobCacheRef.current.get(id)}
                     />
                   )}
                 </>
@@ -852,113 +877,69 @@ export function UnifiedCriteriaAccordion({
               Thêm liên kết minh chứng
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Bạn có thể thêm một hoặc nhiều liên kết (Google Drive, Fanpage, tin bài, văn bản điện tử) cùng một lúc.
+              Nhập tiêu đề gợi nhớ và đường dẫn liên kết (Google Drive, Fanpage, tin bài, văn bản điện tử).
             </DialogDescription>
           </DialogHeader>
 
-          {/* Tab selector */}
-          <div className="flex border-b border-slate-200 gap-4 text-xs font-semibold pt-1">
-            <button
-              type="button"
-              onClick={() => setInputTab("rows")}
-              className={cn(
-                "pb-2 border-b-2 transition-colors cursor-pointer",
-                inputTab === "rows"
-                  ? "border-emerald-700 text-emerald-800"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
-              )}
-            >
-              Thêm từng liên kết (kèm tên)
-            </button>
-            <button
-              type="button"
-              onClick={() => setInputTab("bulk")}
-              className={cn(
-                "pb-2 border-b-2 transition-colors cursor-pointer",
-                inputTab === "bulk"
-                  ? "border-emerald-700 text-emerald-800"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
-              )}
-            >
-              Dán nhanh nhiều link (1 link/dòng)
-            </button>
-          </div>
-
           <div className="flex-1 overflow-y-auto py-2 space-y-3 text-xs">
-            {inputTab === "rows" ? (
-              <div className="space-y-3">
-                {linkRows.map((row, idx) => (
-                  <div key={row.id} className="p-3 rounded-lg border border-slate-200 bg-slate-50/60 space-y-2 relative">
-                    <div className="flex items-center justify-between text-slate-600 font-medium">
-                      <span>Liên kết #{idx + 1}</span>
-                      {linkRows.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => setLinkRows((prev) => prev.filter((r) => r.id !== row.id))}
-                          className="text-slate-400 hover:text-red-600 p-0.5 cursor-pointer"
-                          title="Xóa dòng này"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                    <div>
-                      <Input
-                        placeholder="Tiêu đề / Tên liên kết (VD: Bài viết ngày Hội Đội)"
-                        value={row.title}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setLinkRows((prev) =>
-                            prev.map((r) => (r.id === row.id ? { ...r, title: val } : r))
-                          );
-                        }}
-                        className="text-xs bg-white"
-                      />
-                    </div>
-                    <div>
-                      <Input
-                        placeholder="Đường dẫn URL * (VD: https://facebook.com/...)"
-                        value={row.url}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setLinkRows((prev) =>
-                            prev.map((r) => (r.id === row.id ? { ...r, url: val } : r))
-                          );
-                        }}
-                        className="text-xs bg-white"
-                      />
-                    </div>
+            <div className="space-y-3">
+              {linkRows.map((row, idx) => (
+                <div key={row.id} className="p-3 rounded-lg border border-slate-200 bg-slate-50/60 space-y-2 relative">
+                  <div className="flex items-center justify-between text-slate-600 font-medium">
+                    <span>Liên kết #{idx + 1}</span>
+                    {linkRows.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setLinkRows((prev) => prev.filter((r) => r.id !== row.id))}
+                        className="text-slate-400 hover:text-red-600 p-0.5 cursor-pointer"
+                        title="Xóa dòng này"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
-                ))}
+                  <div>
+                    <Input
+                      placeholder="Tiêu đề / Tên liên kết (VD: Bài viết ngày Hội Đội)"
+                      value={row.title}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setLinkRows((prev) =>
+                          prev.map((r) => (r.id === row.id ? { ...r, title: val } : r))
+                        );
+                      }}
+                      className="text-xs bg-white"
+                    />
+                  </div>
+                  <div>
+                    <Input
+                      placeholder="Đường dẫn URL * (VD: https://facebook.com/...)"
+                      value={row.url}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setLinkRows((prev) =>
+                          prev.map((r) => (r.id === row.id ? { ...r, url: val } : r))
+                        );
+                      }}
+                      className="text-xs bg-white"
+                    />
+                  </div>
+                </div>
+              ))}
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    setLinkRows((prev) => [...prev, { id: Date.now().toString(), title: "", url: "" }])
-                  }
-                  className="w-full text-xs border-dashed border-slate-300 text-slate-600 hover:text-slate-900 gap-1"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Thêm liên kết khác
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <Label className="text-xs text-slate-700 font-medium">Danh sách đường dẫn (Mỗi dòng 1 URL)</Label>
-                <Textarea
-                  placeholder={`https://facebook.com/benluc/posts/123\nhttps://drive.google.com/file/d/abc\nhttps://doanthanhnien.vn/tin-tuc/...`}
-                  rows={6}
-                  value={bulkText}
-                  onChange={(e) => setBulkText(e.target.value)}
-                  className="text-xs font-mono bg-white"
-                />
-                <p className="text-[11px] text-slate-500">
-                  Dán trực tiếp danh sách các link vào đây. Hệ thống sẽ tự động tạo từng mục minh chứng cho mỗi đường dẫn.
-                </p>
-              </div>
-            )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setLinkRows((prev) => [...prev, { id: Date.now().toString(), title: "", url: "" }])
+                }
+                className="w-full text-xs border-dashed border-slate-300 text-slate-600 hover:text-slate-900 gap-1 cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Thêm liên kết khác
+              </Button>
+            </div>
           </div>
 
           <DialogFooter className="pt-2 border-t flex items-center justify-between sm:justify-end gap-2">
@@ -1024,6 +1005,18 @@ export function UnifiedCriteriaAccordion({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ============================================================ */}
+      {/* EVIDENCE PREVIEW MODAL (LIGHTBOX & IN-APP DOCUMENT VIEWER) */}
+      {/* ============================================================ */}
+      <EvidencePreviewModal
+        open={previewModalOpen}
+        onOpenChange={setPreviewModalOpen}
+        item={previewItem}
+        previewUrl={previewUrl}
+        isLoading={previewLoading}
+        error={previewError}
+      />
     </div>
   );
 }
@@ -1047,6 +1040,7 @@ interface EvidenceSubCardProps {
   onOpenAddLink: () => void;
   onRemove: (id: string) => void;
   onViewFile: (item: EvidenceItem) => void;
+  getBlobUrl?: (id: string) => string | undefined;
 }
 
 function EvidenceSubCard({
@@ -1060,6 +1054,7 @@ function EvidenceSubCard({
   onOpenAddLink,
   onRemove,
   onViewFile,
+  getBlobUrl,
 }: EvidenceSubCardProps) {
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -1142,43 +1137,75 @@ function EvidenceSubCard({
         <div className="space-y-2">
           {items.map((ev) => {
             const isUrl = !!ev.external_url;
+            const isImg =
+              ev.mime_type?.startsWith("image/") ||
+              /\.(jpe?g|png|gif|webp|bmp|svg)$/i.test(ev.file_name || "");
+            const cachedBlob = getBlobUrl?.(ev.id);
+            const thumbUrl = cachedBlob || (isUrl ? ev.external_url : null);
+
             return (
               <div
                 key={ev.id}
-                className="flex items-center justify-between gap-3 p-2.5 rounded-md border border-slate-200 bg-white hover:border-slate-300 transition-all text-xs"
+                className="flex items-center justify-between gap-3 p-2.5 rounded-md border border-slate-200 bg-white hover:border-slate-300 transition-all text-xs group"
               >
-                {/* File icon + Name + Size */}
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                  {isUrl ? (
-                    <Globe className="h-4 w-4 text-emerald-600 shrink-0" />
+                {/* File thumbnail / icon + Name + Size */}
+                <div
+                  className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
+                  onClick={() => onViewFile(ev)}
+                  title="Nhấn để xem minh chứng"
+                >
+                  {isImg && thumbUrl ? (
+                    <img
+                      src={thumbUrl}
+                      alt=""
+                      className="h-8 w-8 rounded object-cover border border-slate-200 shrink-0 bg-slate-50"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).style.display = "none";
+                      }}
+                    />
+                  ) : isImg ? (
+                    <div className="h-8 w-8 rounded bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-100">
+                      <ImageIcon className="h-4 w-4" />
+                    </div>
+                  ) : isUrl ? (
+                    <div className="h-8 w-8 rounded bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-100">
+                      <Globe className="h-4 w-4" />
+                    </div>
                   ) : (
-                    <FileText className="h-4 w-4 text-slate-600 shrink-0" />
+                    <div className="h-8 w-8 rounded bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 border border-slate-200">
+                      <FileText className="h-4 w-4" />
+                    </div>
                   )}
-                  <span className="font-bold text-slate-800 uppercase truncate">
-                    {ev.file_name}
-                  </span>
-                  {ev.file_size ? (
-                    <span className="text-slate-500 font-normal shrink-0">
-                      • {formatFileSize(ev.file_size)}
+
+                  <div className="min-w-0 flex-1">
+                    <span className="font-bold text-slate-800 uppercase truncate block hover:text-emerald-800 transition-colors">
+                      {ev.file_name}
                     </span>
-                  ) : null}
+                    {ev.file_size ? (
+                      <span className="text-slate-500 font-normal text-[11px] block">
+                        {formatFileSize(ev.file_size)}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
 
-                {/* Open button & Delete action */}
+                {/* Open/View button & Delete action */}
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
                     onClick={() => onViewFile(ev)}
-                    className="font-medium text-slate-800 hover:text-emerald-800 hover:underline px-2 py-0.5 text-xs rounded transition-colors"
+                    className="font-semibold text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 px-2.5 py-1 text-xs rounded-md transition-colors flex items-center gap-1 cursor-pointer border border-emerald-200/60 bg-emerald-50/40"
+                    title="Xem chi tiết minh chứng"
                   >
-                    Mở
+                    <Eye className="h-3.5 w-3.5" />
+                    <span>Xem</span>
                   </button>
 
                   {isEditable && (
                     <button
                       type="button"
                       onClick={() => onRemove(ev.id)}
-                      className="text-slate-400 hover:text-red-600 p-0.5 transition-colors"
+                      className="text-slate-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition-colors cursor-pointer"
                       title="Xóa minh chứng này"
                     >
                       <Trash2 className="h-3.5 w-3.5" />

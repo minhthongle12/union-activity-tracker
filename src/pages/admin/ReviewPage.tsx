@@ -49,6 +49,7 @@ import {
   ArrowRight,
   Download,
   FileSpreadsheet,
+  Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -56,6 +57,7 @@ import { getEvidenceSignedUrl } from "@/lib/storage";
 import { exportReviewExcel } from "@/lib/exportReviewExcel";
 import { notifyUsers } from "@/lib/notificationService";
 import { recordAuditLog } from "@/lib/auditLog";
+import { EvidencePreviewModal } from "@/components/criteria/EvidencePreviewModal";
 
 // ============================================================
 // Types
@@ -1314,21 +1316,39 @@ function AdminUnitGradingDetail({
   const doc2Items = unit.evidenceItems.filter((e) => e.evidence_type === "doc2");
   const link3Items = unit.evidenceItems.filter((e) => e.evidence_type === "link3");
 
+  // Evidence preview modal state
+  const [previewItem, setPreviewItem] = useState<EvidenceItem | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+
   // Open / View signed URL
   const handleViewFile = async (evItem: EvidenceItem) => {
+    setPreviewItem(evItem);
+    setPreviewError(null);
+    setPreviewModalOpen(true);
+
     if (evItem.external_url) {
-      window.open(evItem.external_url, "_blank");
+      setPreviewUrl(evItem.external_url);
+      setPreviewLoading(false);
       return;
     }
     if (evItem.storage_path) {
+      setPreviewLoading(true);
       try {
         const signedUrl = await getEvidenceSignedUrl("evidence", evItem.storage_path);
-        window.open(signedUrl, "_blank");
-      } catch {
-        toast.info(`Tệp minh chứng: ${evItem.file_name}`);
+        setPreviewUrl(signedUrl);
+      } catch (err) {
+        console.error("Signed URL error:", err);
+        setPreviewError("Không thể tạo liên kết xem tệp minh chứng hoặc quyền truy cập đã hết hạn.");
+        setPreviewUrl(null);
+      } finally {
+        setPreviewLoading(false);
       }
     } else {
-      toast.info(`Tệp minh chứng: ${evItem.file_name}`);
+      setPreviewLoading(false);
+      setPreviewUrl(null);
     }
   };
 
@@ -1600,6 +1620,16 @@ function AdminUnitGradingDetail({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Evidence preview modal */}
+      <EvidencePreviewModal
+        open={previewModalOpen}
+        onOpenChange={setPreviewModalOpen}
+        item={previewItem}
+        previewUrl={previewUrl}
+        isLoading={previewLoading}
+        error={previewError}
+      />
     </div>
   );
 }
@@ -1653,13 +1683,16 @@ function EvidenceReviewSubCard({
                 key={ev.id}
                 className="flex items-center justify-between gap-3 p-2.5 rounded-md border border-slate-200 bg-white hover:border-slate-300 transition-all text-xs"
               >
-                <div className="flex items-center gap-2 min-w-0 flex-1">
+                <div
+                  className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer"
+                  onClick={() => onViewFile(ev)}
+                >
                   {isUrl ? (
                     <Globe className="h-4 w-4 text-emerald-600 shrink-0" />
                   ) : (
                     <FileText className="h-4 w-4 text-slate-600 shrink-0" />
                   )}
-                  <span className="font-bold text-slate-800 uppercase truncate">
+                  <span className="font-bold text-slate-800 uppercase truncate hover:text-emerald-800 transition-colors">
                     {ev.file_name}
                   </span>
                   {ev.file_size ? (
@@ -1672,9 +1705,10 @@ function EvidenceReviewSubCard({
                 <button
                   type="button"
                   onClick={() => onViewFile(ev)}
-                  className="font-medium text-slate-800 hover:text-emerald-800 hover:underline px-2.5 py-1 text-xs rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors shrink-0"
+                  className="font-semibold text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 px-2.5 py-1 text-xs rounded-md border border-emerald-200/60 bg-emerald-50/40 transition-colors shrink-0 flex items-center gap-1 cursor-pointer"
                 >
-                  Mở
+                  <Eye className="h-3.5 w-3.5" />
+                  <span>Xem</span>
                 </button>
               </div>
             );

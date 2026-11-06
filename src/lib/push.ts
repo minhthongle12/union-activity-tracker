@@ -30,11 +30,34 @@ export function urlBase64ToUint8Array(base64String: string): Uint8Array {
 }
 
 /**
+ * Kiểm tra xem người dùng đang mở trên thiết bị iOS (iPhone/iPad) hay không
+ */
+export function isIOS(): boolean {
+  if (typeof window === "undefined" || typeof navigator === "undefined") return false;
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+}
+
+/**
+ * Kiểm tra xem web app đang chạy ở chế độ PWA (Standalone / Đã thêm vào Màn hình chính) hay không
+ */
+export function isStandalone(): boolean {
+  if (typeof window === "undefined") return false;
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (window.navigator as any).standalone === true ||
+    document.referrer.includes("android-app://")
+  );
+}
+
+/**
  * Kiểm tra xem trình duyệt có hỗ trợ Web Push Notification và Service Worker không
  */
 export function isPushSupported(): boolean {
+  if (typeof window === "undefined") return false;
   return (
-    typeof window !== "undefined" &&
     "serviceWorker" in navigator &&
     "PushManager" in window &&
     "Notification" in window
@@ -42,37 +65,86 @@ export function isPushSupported(): boolean {
 }
 
 /**
- * Lấy trạng thái hiện tại của Web Push
+ * Lấy Service Worker registration an toàn trên mọi trình duyệt (đặc biệt iOS Safari)
  */
-export async function getPushStatus(): Promise<{
+export async function getServiceWorkerRegistration(): Promise<ServiceWorkerRegistration | null> {
+  if (typeof window === "undefined" || !("serviceWorker" in navigator)) return null;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    if (reg) return reg;
+  } catch {}
+  try {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    if (regs && regs.length > 0) return regs[0];
+  } catch {}
+  try {
+    return await navigator.serviceWorker.register("/sw.js");
+  } catch (e) {
+    console.warn("Không thể lấy Service Worker registration:", e);
+    return null;
+  }
+}
+
+export interface PushStatusInfo {
   supported: boolean;
   permission: NotificationPermission;
   isSubscribed: boolean;
   subscription: PushSubscription | null;
-}> {
-  if (!isPushSupported()) {
+  isIOSDevice: boolean;
+  isStandaloneMode: boolean;
+  needsHomeScreenInstall: boolean;
+}
+
+/**
+ * Lấy trạng thái hiện tại của Web Push
+ */
+export async function getPushStatus(): Promise<PushStatusInfo> {
+  const ios = isIOS();
+  const standalone = isStandalone();
+  const supported = isPushSupported();
+  const needsHomeScreen = ios && !standalone;
+
+  const permission: NotificationPermission =
+    typeof window !== "undefined" && "Notification" in window
+      ? Notification.permission
+      : "default";
+
+  if (!supported) {
     return {
       supported: false,
-      permission: "denied",
+      permission,
       isSubscribed: false,
       subscription: null,
+      isIOSDevice: ios,
+      isStandaloneMode: standalone,
+      needsHomeScreenInstall: needsHomeScreen,
     };
   }
 
-  const permission = Notification.permission;
   if (permission !== "granted") {
     return {
       supported: true,
       permission,
       isSubscribed: false,
       subscription: null,
+      isIOSDevice: ios,
+      isStandaloneMode: standalone,
+      needsHomeScreenInstall: false,
     };
   }
 
   try {
-    const reg = await navigator.serviceWorker.getRegistration("/sw.js");
+    const reg = await getServiceWorkerRegistration();
     if (!reg) {
-      return { supported: true, permission, isSubscribed: false, subscription: null };
+      return {
+        supported: true,
+        permission,
+        isSubscribed: false,
+        subscription: null,
+        isIOSDevice: ios,
+        isStandaloneMode: standalone,
+        needsHomeScreenInstall: false,
+      };
     }
     const sub = await reg.pushManager.getSubscription();
     return {
@@ -80,10 +152,21 @@ export async function getPushStatus(): Promise<{
       permission,
       isSubscribed: !!sub,
       subscription: sub,
+      isIOSDevice: ios,
+      isStandaloneMode: standalone,
+      needsHomeScreenInstall: false,
     };
   } catch (err) {
     console.warn("Không thể kiểm tra push subscription:", err);
-    return { supported: true, permission, isSubscribed: false, subscription: null };
+    return {
+      supported: true,
+      permission,
+      isSubscribed: false,
+      subscription: null,
+      isIOSDevice: ios,
+      isStandaloneMode: standalone,
+      needsHomeScreenInstall: false,
+    };
   }
 }
 
@@ -91,25 +174,38 @@ export async function getPushStatus(): Promise<{
  * Đăng ký nhận thông báo đẩy trên trình duyệt và lưu vào Supabase
  */
 export async function subscribeUserToPush(userId: string): Promise<PushSubscription> {
-  if (!isPushSupported()) {
-    throw new Error("Trình duyệt hiện tại không hỗ trợ Web Push Notification.");
+  if (typeof window === "undefined") {
+    throw new Error("Không thể thực hiện trên môi trường máy chủ.");
   }
 
-  // 1. Yêu cầu quyền thông báo nếu chưa được cấp
+  // 1. Kiểm tra trên iOS nếu chưa cài PWA
+  if (isIOS() && !isStandalone()) {
+    throw new Error(
+      "Trên iPhone/iPad, Apple yêu cầu bạn cần Thêm ứng dụng vào Màn hình chính (PWA) để nhận thông báo đẩy."
+    );
+  }
+
+  if (!("Notification" in window)) {
+    throw new Error("Trình duyệt hiện tại chưa hỗ trợ Web Push Notification.");
+  }
+
+  // 2. Yêu cầu quyền thông báo trực tiếp
   let permission = Notification.permission;
   if (permission !== "granted") {
     permission = await Notification.requestPermission();
   }
 
   if (permission !== "granted") {
-    throw new Error("Bạn đã từ chối cấp quyền thông báo trên trình duyệt.");
+    throw new Error("Bạn đã từ chối cấp quyền thông báo trên thiết bị.");
   }
 
-  // 2. Đăng ký Service Worker
-  const reg = await navigator.serviceWorker.register("/sw.js");
-  await navigator.serviceWorker.ready;
+  // 3. Đăng ký & lấy Service Worker
+  const reg = await getServiceWorkerRegistration();
+  if (!reg) {
+    throw new Error("Không thể khởi tạo Service Worker trên thiết bị.");
+  }
 
-  // 3. Đăng ký Push Manager với VAPID Public Key
+  // 4. Đăng ký Push Manager với VAPID Public Key
   const publicKey = getVapidPublicKey();
   const applicationServerKey = urlBase64ToUint8Array(publicKey);
 
@@ -121,7 +217,7 @@ export async function subscribeUserToPush(userId: string): Promise<PushSubscript
     });
   }
 
-  // 4. Lưu thông tin subscription vào Supabase
+  // 5. Lưu thông tin subscription vào Supabase
   const rawP256dh = sub.getKey("p256dh");
   const rawAuth = sub.getKey("auth");
 
@@ -148,6 +244,17 @@ export async function subscribeUserToPush(userId: string): Promise<PushSubscript
     throw new Error("Không thể đồng bộ đăng ký với máy chủ: " + error.message);
   }
 
+  // 6. Kích hoạt thông báo xác nhận cục bộ
+  try {
+    if ("showNotification" in reg) {
+      await reg.showNotification("Hội đồng Đội xã Bến Lức", {
+        body: "Đã bật nhận thông báo đẩy thành công trên thiết bị của bạn!",
+        icon: "/huy-hieu-doi.png",
+        badge: "/huy-hieu-doi.png",
+      });
+    }
+  } catch {}
+
   return sub;
 }
 
@@ -155,10 +262,8 @@ export async function subscribeUserToPush(userId: string): Promise<PushSubscript
  * Hủy đăng ký thông báo đẩy
  */
 export async function unsubscribeUserFromPush(userId: string): Promise<void> {
-  if (!isPushSupported()) return;
-
   try {
-    const reg = await navigator.serviceWorker.getRegistration("/sw.js");
+    const reg = await getServiceWorkerRegistration();
     if (reg) {
       const sub = await reg.pushManager.getSubscription();
       if (sub) {

@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { PushNotificationCard } from "@/components/notifications/PushNotificationCard";
 
 export default function UserAccountPage() {
   const { profile, logout } = useAuth();
@@ -283,6 +284,9 @@ export default function UserAccountPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Push Notification Toggle Card */}
+      <PushNotificationCard />
 
       {/* PWA App Information Card */}
       <Card className="border-emerald-800/60 bg-gradient-to-br from-[#0d341f] via-[#092817] to-[#061d10] text-white shadow-lg shadow-emerald-950/10 rounded-2xl">
